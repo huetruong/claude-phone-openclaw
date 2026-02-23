@@ -41,9 +41,9 @@ module.exports = [
       'semi': ['warn', 'always']
     }
   },
-  // voice-app and claude-api-server use ES5-style CommonJS
+  // voice-app, claude-api-server, and openclaw-plugin use CommonJS
   {
-    files: ['voice-app/**/*.js', 'claude-api-server/**/*.js'],
+    files: ['voice-app/**/*.js', 'claude-api-server/**/*.js', 'openclaw-plugin/**/*.js'],
     languageOptions: {
       ecmaVersion: 2020,
       sourceType: 'commonjs',
