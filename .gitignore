@@ -30,6 +30,10 @@ Thumbs.db
 # Docker
 .docker/
 
+# BMAD tooling
+_bmad/
+.claude/
+
 # Temporary files
 tmp/
 temp/
