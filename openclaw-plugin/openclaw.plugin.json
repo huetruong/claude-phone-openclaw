@@ -1,0 +1,15 @@
+{
+  "id": "openclaw-sip-voice",
+  "version": "1.0.0",
+  "name": "SIP Voice Channel",
+  "description": "SIP telephone channel for OpenClaw agents via FreePBX",
+  "main": "src/index.js",
+  "configSchema": {
+    "webhookPort": { "type": "number", "default": 3334 },
+    "apiKey": { "type": "string" },
+    "dmPolicy": { "type": "string", "default": "allowlist" },
+    "accounts": { "type": "array", "items": { "type": "object" } },
+    "bindings": { "type": "array", "items": { "type": "object" } },
+    "identityLinks": { "type": "object" }
+  }
+}

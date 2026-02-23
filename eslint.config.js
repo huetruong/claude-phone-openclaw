@@ -6,6 +6,7 @@ module.exports = [
       'voice-app/node_modules/**',
       'claude-api-server/node_modules/**',
       'cli/node_modules/**',
+      'openclaw-plugin/node_modules/**',
       'voice-app/audio/**',
       '*.md',
       '**/INTEGRATION-EXAMPLE.js'  // Example snippets, not complete code
@@ -41,9 +42,9 @@ module.exports = [
       'semi': ['warn', 'always']
     }
   },
-  // voice-app and claude-api-server use ES5-style CommonJS
+  // voice-app, claude-api-server, and openclaw-plugin use CommonJS
   {
-    files: ['voice-app/**/*.js', 'claude-api-server/**/*.js'],
+    files: ['voice-app/**/*.js', 'claude-api-server/**/*.js', 'openclaw-plugin/**/*.js'],
     languageOptions: {
       ecmaVersion: 2020,
       sourceType: 'commonjs',
