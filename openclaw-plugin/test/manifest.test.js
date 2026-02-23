@@ -66,3 +66,17 @@ test('package.json - express version is ^4', () => {
   assert.ok(pkg.dependencies.express.startsWith('^4'),
     'express version must be ^4');
 });
+
+// L1: dmPolicy default must be "allowlist" — architecture security requirement
+test('manifest - dmPolicy default is "allowlist"', () => {
+  const manifest = require(MANIFEST_PATH);
+  assert.strictEqual(manifest.configSchema.dmPolicy.default, 'allowlist',
+    'dmPolicy default must be "allowlist" (mandatory security default for DID-exposed extensions)');
+});
+
+// L3: package.json must be private to prevent accidental npm publish
+test('package.json - is marked private', () => {
+  const pkg = require(PACKAGE_PATH);
+  assert.strictEqual(pkg.private, true,
+    'package.json must have "private": true to prevent accidental npm publish');
+});

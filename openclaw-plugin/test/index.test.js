@@ -77,3 +77,71 @@ test('index - exports activate and getConfig functions', () => {
   assert.strictEqual(typeof plugin.activate, 'function', 'Must export activate function');
   assert.strictEqual(typeof plugin.getConfig, 'function', 'Must export getConfig function');
 });
+
+// H1: Verify activate() actually calls logger.info with 'channel registered' (AC #2)
+test('index - activate() logs [sip-voice] channel registered at INFO level', async () => {
+  const plugin = requireIndex();
+  const api = createMockApi({ accounts: [], bindings: [] });
+
+  const logLines = [];
+  const origLog = console.log;
+  console.log = (...args) => logLines.push(args.join(' '));
+  try {
+    await plugin.activate(api);
+  } finally {
+    console.log = origLog;
+  }
+
+  assert.strictEqual(logLines.length, 1, 'activate() must emit exactly one INFO log line');
+  assert.ok(logLines[0].includes('[sip-voice]'), 'Log must include [sip-voice] prefix');
+  assert.ok(logLines[0].includes('channel registered'), 'Log must include "channel registered"');
+  assert.ok(logLines[0].includes('INFO'), 'Log must be at INFO level');
+});
+
+// H1: Verify account/binding counts are included in the log
+test('index - activate() includes account and binding counts in log', async () => {
+  const plugin = requireIndex();
+  const api = createMockApi({
+    accounts: [{ id: 'morpheus' }, { id: 'cephanie' }],
+    bindings: [{ accountId: 'morpheus', agentId: 'morpheus' }]
+  });
+
+  const logLines = [];
+  const origLog = console.log;
+  console.log = (...args) => logLines.push(args.join(' '));
+  try {
+    await plugin.activate(api);
+  } finally {
+    console.log = origLog;
+  }
+
+  assert.ok(logLines[0].includes('"accounts":2'), 'Log must include accounts count');
+  assert.ok(logLines[0].includes('"bindings":1'), 'Log must include bindings count');
+});
+
+// M3: Verify activate() rethrows registration errors (after logging them)
+test('index - activate() rethrows if registerChannel throws', async () => {
+  const plugin = requireIndex();
+  const api = createMockApi({});
+  api.registerChannel = () => { throw new Error('duplicate channel id'); };
+
+  await assert.rejects(
+    plugin.activate(api),
+    /duplicate channel id/,
+    'activate() must rethrow errors from registerChannel'
+  );
+});
+
+// M2: Verify getConfig() returns a copy, not the live internal reference
+test('index - getConfig() returns a shallow copy, not the internal reference', async () => {
+  const plugin = requireIndex();
+  const api = createMockApi({ accounts: [{ id: 'morpheus' }] });
+  await plugin.activate(api);
+
+  const config = plugin.getConfig();
+  config.accounts = ['mutated'];
+
+  const config2 = plugin.getConfig();
+  assert.deepStrictEqual(config2.accounts, [{ id: 'morpheus' }],
+    'Mutating getConfig() result must not affect internal pluginConfig');
+});

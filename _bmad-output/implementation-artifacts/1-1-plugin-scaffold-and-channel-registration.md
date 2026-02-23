@@ -1,6 +1,6 @@
 # Story 1.1: Plugin Scaffold & Channel Registration
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -306,18 +306,34 @@ None — implementation was clean on first pass.
 - Root `package.json` updated to include `test:plugin` in test suite.
 - No voice-app regressions — all existing tests pass.
 
+### Senior Developer Review (AI)
+
+**Review Date:** 2026-02-23
+**Outcome:** Changes Requested — all fixed in same session
+
+**Action Items:**
+
+- [x] [High] Missing test: `activate()` log output not verified — AC #2 log requirement untested; added 2 new index tests capturing console.log during activate()
+- [x] [Medium] `eslint.config.js` missing `openclaw-plugin/node_modules/**` in ignores — would lint express source tree on npm install
+- [x] [Medium] `getConfig()` returns live mutable reference to internal pluginConfig — changed to return shallow copy `{ ...pluginConfig }`
+- [x] [Medium] `activate()` no error logging before rethrowing if `registerChannel` throws — added try/catch with `logger.error(...)` + rethrow; added test
+- [x] [Low] `dmPolicy` default value `"allowlist"` not enforced by any test — added manifest test
+- [x] [Low] `formatMessage` data param uses null guard instead of documented default parameter `data = {}` — fixed to use default parameter
+- [x] [Low] Plugin `package.json` missing `"private": true` — added; added manifest test
+
 ### File List
 
 - `openclaw-plugin/openclaw.plugin.json` (new)
-- `openclaw-plugin/package.json` (new)
-- `openclaw-plugin/src/index.js` (new)
-- `openclaw-plugin/src/logger.js` (new)
-- `openclaw-plugin/test/index.test.js` (new)
+- `openclaw-plugin/package.json` (new — modified in review: added `"private": true`)
+- `openclaw-plugin/src/index.js` (new — modified in review: try/catch in activate, shallow copy in getConfig)
+- `openclaw-plugin/src/logger.js` (new — modified in review: default parameter `data = {}`)
+- `openclaw-plugin/test/index.test.js` (new — modified in review: added 4 tests for H1/M2/M3)
 - `openclaw-plugin/test/logger.test.js` (new)
-- `openclaw-plugin/test/manifest.test.js` (new)
-- `eslint.config.js` (modified — added openclaw-plugin to CommonJS rule)
+- `openclaw-plugin/test/manifest.test.js` (new — modified in review: added 2 tests for L1/L3)
+- `eslint.config.js` (modified — added openclaw-plugin to CommonJS rule + node_modules ignore)
 - `package.json` (modified — added test:plugin script)
 
 ### Change Log
 
 - 2026-02-23: Implemented Story 1.1 — Plugin scaffold and channel registration. Created openclaw-plugin directory with manifest, package.json, logger, and entry point. 23 unit tests added covering all ACs.
+- 2026-02-23: Code review — fixed 7 findings (1 High, 3 Medium, 3 Low). 29 tests now pass. Story marked done.

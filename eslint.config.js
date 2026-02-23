@@ -6,6 +6,7 @@ module.exports = [
       'voice-app/node_modules/**',
       'claude-api-server/node_modules/**',
       'cli/node_modules/**',
+      'openclaw-plugin/node_modules/**',
       'voice-app/audio/**',
       '*.md',
       '**/INTEGRATION-EXAMPLE.js'  // Example snippets, not complete code

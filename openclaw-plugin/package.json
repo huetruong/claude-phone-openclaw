@@ -1,6 +1,7 @@
 {
   "name": "openclaw-sip-voice",
   "version": "1.0.0",
+  "private": true,
   "description": "SIP telephone channel plugin for OpenClaw agents via FreePBX",
   "main": "src/index.js",
   "scripts": {

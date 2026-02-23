@@ -1,8 +1,8 @@
 'use strict';
 
-function formatMessage(level, message, data) {
+function formatMessage(level, message, data = {}) {
   const timestamp = new Date().toISOString();
-  const dataStr = data && Object.keys(data).length > 0 ? ' ' + JSON.stringify(data) : '';
+  const dataStr = Object.keys(data).length > 0 ? ' ' + JSON.stringify(data) : '';
   return `[${timestamp}] ${level.toUpperCase()} [sip-voice] ${message}${dataStr}`;
 }
 
