@@ -129,7 +129,7 @@ router.post('/outbound-call', async function(req, res) {
     var deviceParam = req.body.device;
     var callerId = req.body.callerId;
     var timeoutSeconds = req.body.timeoutSeconds || 30;
-    var webhookUrl = req.body.webhookUrl;
+    var webhookUrl = process.env.OPENCLAW_WEBHOOK_URL || null;
 
     // Look up device configuration
     var deviceConfig = null;
