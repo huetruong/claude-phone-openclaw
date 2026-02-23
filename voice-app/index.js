@@ -254,6 +254,12 @@ function checkReadyState() {
     });
 
     console.log("[" + new Date().toISOString() + "] SIP INVITE handler registered");
+
+    // Handle SIP OPTIONS keepalive pings from PBX
+    srf.options(function(req, res) {
+      res.send(200);
+    });
+
     console.log("[" + new Date().toISOString() + "] Multi-extension voice interface ready!");
   }
 }

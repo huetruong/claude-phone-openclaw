@@ -165,10 +165,13 @@ function runClaudeOnce({ fullPrompt, callId, timestamp }) {
   }
 
   return new Promise((resolve, reject) => {
+    const spawnEnv = Object.assign({}, claudeEnv);
+    delete spawnEnv.CLAUDECODE;
+
     const claude = spawn('claude', args, {
       stdio: ['pipe', 'pipe', 'pipe'],
       shell: false,
-      env: claudeEnv
+      env: spawnEnv
     });
 
     let stdout = '';
