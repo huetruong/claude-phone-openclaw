@@ -1,15 +1,17 @@
 {
   "9000": {
-    "name": "Assistant",
+    "name": "morpheus",
     "extension": "9000",
+    "accountId": "morpheus",
     "authId": "your-3cx-auth-id",
     "password": "your-3cx-password",
     "voiceId": "your-elevenlabs-voice-id",
     "prompt": "You are a helpful AI assistant. Keep voice responses under 40 words."
   },
   "9002": {
-    "name": "ServerBot",
+    "name": "serverbot",
     "extension": "9002",
+    "accountId": "serverbot",
     "authId": "another-auth-id",
     "password": "another-password",
     "voiceId": "another-voice-id",

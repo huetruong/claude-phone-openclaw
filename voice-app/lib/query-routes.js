@@ -267,6 +267,7 @@ router.post('/query', async (req, res) => {
           prompt: fullPrompt,
           callId,
           devicePrompt,
+          accountId: device ? device.accountId : undefined,  // forwarded for audit; /ask-structured routes to Claude CLI (not openclaw bridge)
           schema: {
             queryType: schema?.queryType || 'general',
             requiredFields: schema?.requiredFields || [],
@@ -309,6 +310,7 @@ router.post('/query', async (req, res) => {
       response = await claudeBridge.query(fullPrompt, {
         callId,
         devicePrompt,
+        accountId: device ? device.accountId : undefined,
         timeout
       });
     }

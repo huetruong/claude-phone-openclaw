@@ -23,6 +23,7 @@ const CONFIG_PATH = path.join(__dirname, '../config/devices.json');
 const MORPHEUS_DEFAULT = {
   name: 'Morpheus',
   extension: '9000',
+  accountId: 'morpheus',
   authId: 'Au0XZPTpJY',
   password: 'DGHwMW6v25',
   voiceId: 'JAgnJveGGUh4qy4kh6dF',
@@ -70,6 +71,11 @@ class DeviceRegistry {
         if (!device.name || !device.extension) {
           logger.warn('Skipping invalid device config', { extension, device });
           continue;
+        }
+
+        if (!device.accountId) {
+          logger.warn('Device missing accountId, using name as fallback', { extension, name: device.name });
+          device.accountId = device.name;
         }
 
         this.devices[extension] = device;

@@ -47,8 +47,8 @@ development_status:
   1-4-openclaw-bridge-and-bridge-loader: done
   epic-1-retrospective: optional
 
-  epic-2: backlog
-  2-1-device-configuration-with-accountid: backlog
+  epic-2: in-progress
+  2-1-device-configuration-with-accountid: done
   2-2-plugin-agent-bindings-and-multi-extension-routing: backlog
   2-3-concurrent-session-isolation: backlog
   epic-2-retrospective: optional

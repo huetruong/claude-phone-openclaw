@@ -221,7 +221,7 @@ async function conversationLoop(endpoint, dialog, callUuid, options, deviceConfi
       console.log('[' + new Date().toISOString() + '] CLAUDE Querying (device: ' + deviceName + ')...');
       const claudeResponse = await claudeBridge.query(
         transcript,
-        { callId: callUuid, devicePrompt: devicePrompt }
+        { callId: callUuid, devicePrompt: devicePrompt, accountId: deviceConfig ? deviceConfig.accountId : undefined }
       );
 
       // Stop hold music
