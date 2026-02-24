@@ -60,6 +60,7 @@ describe('Device management', () => {
 
       const newDevice = {
         name: 'Trinity',
+        accountId: 'trinity',
         extension: '9001',
         authId: '9001',
         password: 'secret',
@@ -71,6 +72,26 @@ describe('Device management', () => {
 
       assert.strictEqual(config.devices.length, 2);
       assert.strictEqual(config.devices[1].name, 'Trinity');
+    });
+
+    it('should include accountId in saved device when provided', () => {
+      const answers = { name: 'Trinity', accountId: 'custom-id' };
+      const newDevice = {
+        name: answers.name.trim(),
+        accountId: answers.accountId || answers.name.trim().toLowerCase(),
+        extension: '9001',
+      };
+      assert.strictEqual(newDevice.accountId, 'custom-id');
+    });
+
+    it('should default accountId to device name (lowercased) when left blank', () => {
+      const answers = { name: 'Trinity', accountId: '' };
+      const newDevice = {
+        name: answers.name.trim(),
+        accountId: answers.accountId || answers.name.trim().toLowerCase(),
+        extension: '9001',
+      };
+      assert.strictEqual(newDevice.accountId, 'trinity');
     });
   });
 
@@ -91,6 +112,18 @@ describe('Device management', () => {
     it('should handle empty device list', () => {
       const config = { devices: [] };
       assert.strictEqual(config.devices.length, 0);
+    });
+
+    it('should display Account ID column using device accountId', () => {
+      const device = { name: 'Morpheus', extension: '9000', voiceId: 'voice-123', accountId: 'morpheus' };
+      const accountIdDisplay = device.accountId || device.name;
+      assert.strictEqual(accountIdDisplay, 'morpheus');
+    });
+
+    it('should fall back to device name for Account ID when accountId is absent', () => {
+      const device = { name: 'Morpheus', extension: '9000', voiceId: 'voice-123' };
+      const accountIdDisplay = device.accountId || device.name;
+      assert.strictEqual(accountIdDisplay, 'Morpheus');
     });
   });
 

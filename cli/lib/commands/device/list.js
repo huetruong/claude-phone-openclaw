@@ -23,18 +23,20 @@ export async function deviceListCommand() {
   }
 
   // Calculate column widths
-  const nameWidth = Math.max(10, ...config.devices.map(d => d.name.length));
+  const nameWidth = Math.max(4, ...config.devices.map(d => d.name.length)); // "Name" min
   const extWidth = 9; // "Extension"
+  const accountIdWidth = Math.max(10, ...config.devices.map(d => (d.accountId || d.name).length)); // "Account ID" min
   const voiceWidth = 30;
 
   // Print header
-  const horizontalLine = '─'.repeat(nameWidth + extWidth + voiceWidth + 8);
+  const horizontalLine = '─'.repeat(nameWidth + extWidth + accountIdWidth + voiceWidth + 11);
   console.log('┌' + horizontalLine + '┐');
 
   const namePad = 'Name'.padEnd(nameWidth);
   const extPad = 'Extension'.padEnd(extWidth);
+  const accountIdPad = 'Account ID'.padEnd(accountIdWidth);
   const voicePad = 'Voice ID'.padEnd(voiceWidth);
-  console.log(`│ ${chalk.bold(namePad)} │ ${chalk.bold(extPad)} │ ${chalk.bold(voicePad)} │`);
+  console.log(`│ ${chalk.bold(namePad)} │ ${chalk.bold(extPad)} │ ${chalk.bold(accountIdPad)} │ ${chalk.bold(voicePad)} │`);
 
   console.log('├' + horizontalLine + '┤');
 
@@ -42,11 +44,12 @@ export async function deviceListCommand() {
   for (const device of config.devices) {
     const namePad = device.name.padEnd(nameWidth);
     const extPad = device.extension.padEnd(extWidth);
+    const accountIdDisplay = (device.accountId || device.name).padEnd(accountIdWidth);
     const voiceDisplay = device.voiceId.length > voiceWidth
       ? device.voiceId.substring(0, voiceWidth - 3) + '...'
       : device.voiceId.padEnd(voiceWidth);
 
-    console.log(`│ ${namePad} │ ${extPad} │ ${voiceDisplay} │`);
+    console.log(`│ ${namePad} │ ${extPad} │ ${accountIdDisplay} │ ${voiceDisplay} │`);
   }
 
   console.log('└' + horizontalLine + '┘');

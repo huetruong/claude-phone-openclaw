@@ -40,6 +40,12 @@ export async function deviceAddCommand() {
     },
     {
       type: 'input',
+      name: 'accountId',
+      message: 'Account ID (OpenClaw agent binding):',
+      default: (answers) => answers.name.trim().toLowerCase(),
+    },
+    {
+      type: 'input',
       name: 'extension',
       message: 'SIP extension (4-5 digits):',
       validate: (input) => {
@@ -106,6 +112,7 @@ export async function deviceAddCommand() {
   // Add device to config
   const newDevice = {
     name: answers.name.trim(),
+    accountId: answers.accountId || answers.name.trim().toLowerCase(),
     extension: answers.extension,
     authId: answers.authId || answers.extension,
     password: answers.password,
