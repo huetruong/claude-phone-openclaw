@@ -1,6 +1,6 @@
 # Story 1.3: Voice Query Routing
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -351,12 +351,30 @@ Claude Opus 4.6
 - Session store integration: callId used as both key and sessionId for correlation
 - PII discipline enforced: peerId logged at DEBUG only, excluded from INFO/WARN/ERROR
 - End-session handles missing callId gracefully (WARN log, still returns 200)
-- All 70 plugin tests pass (18 new tests added, existing tests updated from 501 stubs to real assertions)
+- All 74 plugin tests pass (22 new tests added, existing tests updated from 501 stubs to real assertions)
 - 0 lint errors (12 pre-existing warnings in voice-app, none in plugin)
+
+### Senior Developer Review (AI)
+
+**Reviewer:** Code Review Workflow — 2026-02-23
+**Issues found:** 3 High, 4 Medium, 2 Low — **All fixed**
+
+| ID | Severity | Description | Fix |
+|----|----------|-------------|-----|
+| H1 | HIGH | `req.body` crash on non-JSON requests — destructuring undefined in handlers and catch blocks | Guarded with `req.body \|\| {}` in both handlers and catch blocks |
+| H2 | HIGH | Task 5 marked [x] but `accounts` not passed to `createServer()` | Added `accounts` to createServer() call in index.js |
+| H3 | HIGH | No startup validation for `queryAgent` callback — misconfiguration returns misleading 503 | Added `typeof config.queryAgent !== 'function'` check with clear error |
+| M1 | MEDIUM | Session-resume test doesn't verify session store size (passes trivially) | Added `sessionStore.size() === 1` assertions after both queries |
+| M2 | MEDIUM | No tests for empty/non-JSON body edge cases | Added empty body test verifying 400 response |
+| M3 | MEDIUM | `peerId` shown as required in HTTP contract but not validated | Added test confirming peerId is optional; succeeds without it |
+| M4 | MEDIUM | No `express.json()` body size limit on DID-exposed endpoint | Added `{ limit: '16kb' }` to express.json() |
+| L1 | LOW | Unnecessary `return await` in queryAgent callback | Changed to `return api.queryAgent(...)` |
+| L2 | LOW | `peerId \|\| undefined` uses falsy check instead of nullish | Changed to `peerId ?? undefined` |
 
 ### Change Log
 
 - 2026-02-24: Story 1.3 implementation — voice query routing and end-session handlers
+- 2026-02-24: Code review — fixed 9 issues (3H, 4M, 2L): req.body guards, queryAgent startup validation, accounts threading, body size limit, test strengthening, style fixes
 
 ### File List
 

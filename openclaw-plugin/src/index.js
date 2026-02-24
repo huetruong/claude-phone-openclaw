@@ -30,17 +30,18 @@ async function activate(api) {
 
     // Build queryAgent callback that routes to the OpenClaw agent via api.
     const queryAgent = async (agentId, sessionId, prompt, peerId) => {
-      return await api.queryAgent(agentId, {
+      return api.queryAgent(agentId, {
         sessionId,
         message: prompt,
-        identity: peerId || undefined
+        identity: peerId ?? undefined
       });
     };
 
-    // Start webhook server with bindings and query callback.
+    // Start webhook server with bindings, accounts, and query callback.
     const app = createServer({
       apiKey: pluginConfig.apiKey,
       bindings,
+      accounts,
       queryAgent
     });
     const port = pluginConfig.webhookPort || 3334;

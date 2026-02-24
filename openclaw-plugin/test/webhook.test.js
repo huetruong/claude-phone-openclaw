@@ -186,15 +186,19 @@ test('webhook - POST /voice/query resumes session for existing callId (no duplic
     return 'ok';
   };
   await withServer(makeConfig({ queryAgent }), async (server) => {
+    const sessionStore = require('../src/session-store');
+
     // First query — creates session.
     await request(server, {
       path: '/voice/query', method: 'POST', headers: AUTH
     }, { prompt: 'first', callId: 'call-resume', accountId: 'morpheus', peerId: '+1' });
+    assert.strictEqual(sessionStore.size(), 1, 'One session after first query');
 
     // Second query — resumes same session.
     await request(server, {
       path: '/voice/query', method: 'POST', headers: AUTH
     }, { prompt: 'second', callId: 'call-resume', accountId: 'morpheus', peerId: '+1' });
+    assert.strictEqual(sessionStore.size(), 1, 'Still one session after second query (no duplicate)');
 
     assert.strictEqual(calls.length, 2);
     assert.strictEqual(calls[0], calls[1], 'Both queries must use the same sessionId');
@@ -329,6 +333,54 @@ test('webhook - peerId never appears in INFO/WARN/ERROR logs', async () => {
     assert.ok(!line.includes('+15559876543'),
       `peerId must not appear in non-DEBUG log: ${line}`);
   }
+});
+
+// ── createServer validation ───────────────────────────────────────────────────
+
+test('webhook - createServer throws if queryAgent is not provided', () => {
+  const { createServer } = requireWebhookServer();
+  assert.throws(
+    () => createServer({ apiKey: 'test-key', bindings: TEST_BINDINGS }),
+    (err) => err.message.includes('queryAgent callback is required'),
+    'Must throw when queryAgent is missing'
+  );
+});
+
+test('webhook - createServer throws if queryAgent is not a function', () => {
+  const { createServer } = requireWebhookServer();
+  assert.throws(
+    () => createServer({ apiKey: 'test-key', bindings: TEST_BINDINGS, queryAgent: 'not-a-fn' }),
+    (err) => err.message.includes('queryAgent callback is required'),
+    'Must throw when queryAgent is not a function'
+  );
+});
+
+// ── POST /voice/query — peerId is optional ───────────────────────────────────
+
+test('webhook - POST /voice/query succeeds without peerId (optional field)', async () => {
+  const queryAgent = async (agentId, sessionId, prompt, peerId) => {
+    assert.strictEqual(peerId, undefined, 'peerId must be undefined when not sent');
+    return 'ok';
+  };
+  await withServer(makeConfig({ queryAgent }), async (server) => {
+    const res = await request(server, {
+      path: '/voice/query', method: 'POST', headers: AUTH
+    }, { prompt: 'hello', callId: 'uuid-no-peer', accountId: 'morpheus' });
+    assert.strictEqual(res.status, 200);
+    assert.deepStrictEqual(res.body, { response: 'ok' });
+  });
+});
+
+// ── Edge cases: malformed body ────────────────────────────────────────────────
+
+test('webhook - POST /voice/query with empty body returns 400 (not crash)', async () => {
+  await withServer(makeConfig(), async (server) => {
+    const res = await request(server, {
+      path: '/voice/query', method: 'POST', headers: AUTH
+    }, {});
+    assert.strictEqual(res.status, 400);
+    assert.ok(res.body.error.includes('missing required field'));
+  });
 });
 
 // ── Unknown routes ────────────────────────────────────────────────────────────

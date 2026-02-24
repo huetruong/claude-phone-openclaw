@@ -12,9 +12,14 @@ const { createAuthMiddleware } = require('./auth');
  * @param {object} config
  * @param {string} config.apiKey - Bearer token for auth middleware
  * @param {Array}  config.bindings - accountId → agentId mapping array
+ * @param {Array}  config.accounts - account definitions (for future allowlist enforcement)
  * @param {Function} config.queryAgent - async (agentId, sessionId, prompt, peerId) => string
  */
 function createServer(config = {}) {
+  if (typeof config.queryAgent !== 'function') {
+    throw new Error('[sip-voice] queryAgent callback is required: webhook server cannot route queries without it');
+  }
+
   const app = express();
   const auth = createAuthMiddleware(config.apiKey);
 
@@ -34,16 +39,17 @@ function createServer(config = {}) {
   // Auth runs first on all /voice/* routes, before body parsing.
   // This ensures unauthenticated requests are rejected before any body allocation.
   app.use('/voice', auth);
-  app.use('/voice', express.json());
+  app.use('/voice', express.json({ limit: '16kb' }));
 
   // POST /voice/query — route caller prompt to OpenClaw agent
   app.post('/voice/query', async (req, res) => {
     try {
-      const { prompt, callId, accountId, peerId } = req.body;
+      const body = req.body || {};
+      const { prompt, callId, accountId, peerId } = body;
 
       // Validate required fields.
       for (const field of ['prompt', 'callId', 'accountId']) {
-        if (!req.body[field]) {
+        if (!body[field]) {
           return res.status(400).json({ error: `missing required field: ${field}` });
         }
       }
@@ -69,7 +75,7 @@ function createServer(config = {}) {
       const response = await queryAgent(agentId, sessionId, prompt, peerId);
       res.json({ response });
     } catch (err) {
-      logger.error('query failed', { callId: req.body.callId, error: err.message });
+      logger.error('query failed', { callId: (req.body || {}).callId, error: err.message });
       res.status(503).json({ error: 'agent unavailable' });
     }
   });
@@ -77,7 +83,7 @@ function createServer(config = {}) {
   // POST /voice/end-session — remove session mapping (voice-app cleanup only)
   app.post('/voice/end-session', async (req, res) => {
     try {
-      const { callId } = req.body;
+      const { callId } = req.body || {};
 
       if (!callId) {
         return res.status(400).json({ error: 'missing required field: callId' });
@@ -92,7 +98,7 @@ function createServer(config = {}) {
 
       res.json({ ok: true });
     } catch (err) {
-      logger.error('end-session failed', { callId: req.body.callId, error: err.message });
+      logger.error('end-session failed', { callId: (req.body || {}).callId, error: err.message });
       res.status(500).json({ error: 'internal error' });
     }
   });
