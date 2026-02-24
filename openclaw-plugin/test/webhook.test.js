@@ -130,6 +130,30 @@ test('webhook - POST /voice/end-session with correct token returns 501 stub', as
   });
 });
 
+// ── Unknown routes ────────────────────────────────────────────────────────────
+
+test('webhook - unknown non-voice route returns 404 JSON', async () => {
+  await withServer({ apiKey: 'test-key' }, async (server) => {
+    // Route outside /voice prefix — no auth, no handler → 404
+    const res = await request(server, { path: '/api/unknown' });
+    assert.strictEqual(res.status, 404);
+    assert.deepStrictEqual(res.body, { error: 'not found' });
+  });
+});
+
+test('webhook - unknown /voice route with valid auth returns 404 JSON', async () => {
+  await withServer({ apiKey: 'test-key' }, async (server) => {
+    // Auth passes but no matching route → 404 (not Express HTML default)
+    const res = await request(server, {
+      path: '/voice/nonexistent',
+      method: 'GET',
+      headers: { Authorization: 'Bearer test-key' }
+    });
+    assert.strictEqual(res.status, 404);
+    assert.deepStrictEqual(res.body, { error: 'not found' });
+  });
+});
+
 // ── Server startup ────────────────────────────────────────────────────────────
 
 test('webhook - startServer logs [sip-voice] webhook server listening on port <N>', async () => {

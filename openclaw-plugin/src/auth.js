@@ -7,6 +7,9 @@ const logger = require('./logger');
  * apiKey comes from plugin config (api.getConfig()), not from process.env.
  */
 function createAuthMiddleware(apiKey) {
+  if (!apiKey) {
+    throw new Error('[sip-voice] apiKey is required: webhook server cannot start without a configured API key');
+  }
   return function authMiddleware(req, res, next) {
     const header = req.headers.authorization;
     if (!header || !header.startsWith('Bearer ') || header.slice(7) !== apiKey) {

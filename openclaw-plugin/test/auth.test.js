@@ -97,6 +97,24 @@ test('auth - failure is logged at WARN level without including the token', () =>
   assert.ok(!warnLines[0].includes('test-key'), 'Must NOT include the configured API key');
 });
 
+test('auth - createAuthMiddleware throws if apiKey is empty string', () => {
+  const { createAuthMiddleware } = requireAuth();
+  assert.throws(
+    () => createAuthMiddleware(''),
+    /apiKey is required/,
+    'Must throw when apiKey is empty string'
+  );
+});
+
+test('auth - createAuthMiddleware throws if apiKey is undefined', () => {
+  const { createAuthMiddleware } = requireAuth();
+  assert.throws(
+    () => createAuthMiddleware(undefined),
+    /apiKey is required/,
+    'Must throw when apiKey is undefined'
+  );
+});
+
 test('auth - missing header is logged at WARN level', () => {
   const { createAuthMiddleware } = requireAuth();
   const middleware = createAuthMiddleware('test-key');

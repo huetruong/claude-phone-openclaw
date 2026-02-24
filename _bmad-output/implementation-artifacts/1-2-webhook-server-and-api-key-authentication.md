@@ -1,6 +1,6 @@
 # Story 1.2: Webhook Server & API Key Authentication
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -317,6 +317,7 @@ None — implementation proceeded without blocking issues.
 ### Change Log
 
 - 2026-02-24: Story 1.2 implemented — webhook server, auth middleware, session store, integration into activate() (claude-sonnet-4-6)
+- 2026-02-24: Code review fixes — M1: moved express.json() after auth middleware so body parsing is skipped on 401; M2: createAuthMiddleware() throws on empty/undefined apiKey (fail-fast misconfiguration guard); L3: added JSON 404 catch-all handler; 2 new auth tests + 2 new webhook tests; 59 tests total, 0 failures (claude-sonnet-4-6)
 
 ### File List
 
@@ -328,3 +329,4 @@ None — implementation proceeded without blocking issues.
 - `openclaw-plugin/test/session-store.test.js` — new
 - `openclaw-plugin/test/webhook.test.js` — new
 - `openclaw-plugin/test/index.test.js` — modified (inject webhook-server mock for test isolation)
+- `_bmad-output/implementation-artifacts/sprint-status.yaml` — modified (story status update)

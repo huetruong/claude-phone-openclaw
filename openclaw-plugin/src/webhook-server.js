@@ -12,16 +12,15 @@ function createServer(config = {}) {
   const app = express();
   const auth = createAuthMiddleware(config.apiKey);
 
-  app.use(express.json());
-
-  // Health endpoint is unauthenticated — registered BEFORE the auth middleware so
-  // the response is sent before auth is ever checked for this route.
+  // Health endpoint is unauthenticated — no body parsing needed.
   app.get('/voice/health', (req, res) => {
     res.json({ ok: true });
   });
 
-  // All remaining /voice/* routes require a valid Bearer token.
+  // Auth runs first on all /voice/* routes, before body parsing.
+  // This ensures unauthenticated requests are rejected before any body allocation.
   app.use('/voice', auth);
+  app.use('/voice', express.json());
 
   // Stub routes — business logic implemented in Story 1.3.
   app.post('/voice/query', async (req, res) => {
@@ -30,6 +29,11 @@ function createServer(config = {}) {
 
   app.post('/voice/end-session', async (req, res) => {
     res.status(501).json({ error: 'not implemented' });
+  });
+
+  // Catch-all: unknown routes return JSON 404 (consistent with API contract).
+  app.use((req, res) => {
+    res.status(404).json({ error: 'not found' });
   });
 
   return app;
