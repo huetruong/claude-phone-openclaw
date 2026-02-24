@@ -13,7 +13,7 @@ function requireWebhookServer() {
   delete require.cache[require.resolve('../src/webhook-server')];
   try { delete require.cache[require.resolve('../src/auth')]; } catch { /* ignore */ }
   try { delete require.cache[require.resolve('../src/logger')]; } catch { /* ignore */ }
-  try { delete require.cache[require.resolve('../src/session-store')]; } catch { /* ignore */ }
+  // session-store is intentionally NOT evicted here — beforeEach owns isolation via .clear()
   return require('../src/webhook-server');
 }
 
@@ -80,11 +80,10 @@ async function withServer(config, fn) {
 }
 
 // Clear session store before each test to avoid cross-test state.
+// requireWebhookServer() reuses the cached session-store module, so clearing it here
+// is the effective isolation mechanism for all tests.
 beforeEach(() => {
-  try {
-    const sessionStore = requireFresh('../src/session-store');
-    sessionStore.clear();
-  } catch { /* ignore */ }
+  require('../src/session-store').clear();
 });
 
 // ── Health endpoint ────────────────────────────────────────────────────────────
@@ -219,6 +218,97 @@ test('webhook - POST /voice/query resumes session for existing callId (no duplic
 
     assert.strictEqual(calls.length, 2);
     assert.strictEqual(calls[0], calls[1], 'Both queries must use the same sessionId');
+  });
+});
+
+// ── POST /voice/query — concurrent session isolation ──────────────────────────
+
+test('webhook - concurrent calls on same extension get separate session store entries', async () => {
+  await withServer(makeConfig(), async (server) => {
+    const sessionStore = require('../src/session-store');
+
+    // Two callers dial simultaneously — fired concurrently with Promise.all.
+    const [resA, resB] = await Promise.all([
+      request(server, { path: '/voice/query', method: 'POST', headers: AUTH },
+        { prompt: 'hello from A', callId: 'call-A', accountId: 'morpheus', peerId: '+15551111111' }),
+      request(server, { path: '/voice/query', method: 'POST', headers: AUTH },
+        { prompt: 'hello from B', callId: 'call-B', accountId: 'morpheus', peerId: '+15552222222' })
+    ]);
+    assert.strictEqual(resA.status, 200, 'Caller A query must succeed (200)');
+    assert.strictEqual(resB.status, 200, 'Caller B query must succeed (200)');
+
+    assert.ok(sessionStore.get('call-A'), 'Caller A session must exist');
+    assert.ok(sessionStore.get('call-B'), 'Caller B session must exist');
+    // sessionId === callId by design; assert each callId maps to its own sessionId.
+    assert.strictEqual(sessionStore.get('call-A'), 'call-A', 'callId A must map to its own sessionId');
+    assert.strictEqual(sessionStore.get('call-B'), 'call-B', 'callId B must map to its own sessionId');
+    assert.notStrictEqual(
+      sessionStore.get('call-A'),
+      sessionStore.get('call-B'),
+      'Caller A and B must have different sessionIds — no context sharing'
+    );
+    assert.strictEqual(sessionStore.size(), 2, 'Exactly two independent sessions must be active');
+  });
+});
+
+test('webhook - concurrent callers on same extension route to independent OpenClaw sessions', async () => {
+  const calls = [];
+  const queryAgent = async (agentId, sessionId, prompt) => {
+    calls.push({ agentId, sessionId, prompt });
+    return `reply for session ${sessionId}`;
+  };
+  await withServer(makeConfig({ queryAgent }), async (server) => {
+    const [resA, resB] = await Promise.all([
+      request(server, { path: '/voice/query', method: 'POST', headers: AUTH },
+        { prompt: 'caller A prompt', callId: 'concurrent-A', accountId: 'morpheus', peerId: '+1' }),
+      request(server, { path: '/voice/query', method: 'POST', headers: AUTH },
+        { prompt: 'caller B prompt', callId: 'concurrent-B', accountId: 'morpheus', peerId: '+2' })
+    ]);
+
+    assert.strictEqual(calls.length, 2, 'queryAgent must be called once per caller');
+    // calls[] ordering reflects event-loop scheduling, not Promise.all input order —
+    // assert only that the two sessionIds are distinct (order-agnostic).
+    assert.notStrictEqual(
+      calls[0].sessionId,
+      calls[1].sessionId,
+      'Each concurrent caller must receive an independent sessionId'
+    );
+    // Each response reflects only that caller's own session.
+    assert.ok(
+      resA.body.response.includes('concurrent-A'),
+      'Caller A response must reference only caller A session'
+    );
+    assert.ok(
+      resB.body.response.includes('concurrent-B'),
+      'Caller B response must reference only caller B session'
+    );
+  });
+});
+
+test('webhook - end-session for caller A does not affect caller B session', async () => {
+  await withServer(makeConfig(), async (server) => {
+    const sessionStore = require('../src/session-store');
+
+    // Establish two sessions.
+    const setupA = await request(server, { path: '/voice/query', method: 'POST', headers: AUTH },
+      { prompt: 'hi', callId: 'caller-A', accountId: 'morpheus', peerId: '+1' });
+    assert.strictEqual(setupA.status, 200, 'Caller A session setup must succeed (200)');
+    const setupB = await request(server, { path: '/voice/query', method: 'POST', headers: AUTH },
+      { prompt: 'hi', callId: 'caller-B', accountId: 'morpheus', peerId: '+2' });
+    assert.strictEqual(setupB.status, 200, 'Caller B session setup must succeed (200)');
+
+    assert.strictEqual(sessionStore.size(), 2, 'Two sessions must be active before end-session');
+
+    // Caller A hangs up.
+    const res = await request(server, { path: '/voice/end-session', method: 'POST', headers: AUTH },
+      { callId: 'caller-A' });
+    assert.strictEqual(res.status, 200);
+    assert.deepStrictEqual(res.body, { ok: true });
+
+    // Only caller A removed; caller B unaffected.
+    assert.strictEqual(sessionStore.get('caller-A'), undefined, 'Caller A session must be removed');
+    assert.ok(sessionStore.get('caller-B'), 'Caller B session must remain active');
+    assert.strictEqual(sessionStore.size(), 1, 'Exactly one session must remain after caller A ends');
   });
 });
 
