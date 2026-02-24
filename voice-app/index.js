@@ -16,7 +16,7 @@ var sipHandler = require("./lib/sip-handler");
 var handleInvite = sipHandler.handleInvite;
 var extractCallerId = sipHandler.extractCallerId;
 var whisperClient = require("./lib/whisper-client");
-var claudeBridge = require("./lib/claude-bridge");
+var claudeBridge = require('./lib/bridge-loader').loadBridge();
 var ttsService = require("./lib/tts-service");
 
 // Multi-extension support
