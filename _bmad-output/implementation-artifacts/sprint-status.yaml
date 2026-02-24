@@ -43,7 +43,7 @@ development_status:
   epic-1: in-progress
   1-1-plugin-scaffold-and-channel-registration: done
   1-2-webhook-server-and-api-key-authentication: done
-  1-3-voice-query-routing: backlog
+  1-3-voice-query-routing: done
   1-4-openclaw-bridge-and-bridge-loader: backlog
   epic-1-retrospective: optional
 
