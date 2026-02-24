@@ -4,11 +4,6 @@ const { test, beforeEach } = require('node:test');
 const assert = require('node:assert');
 const http = require('node:http');
 
-function requireFresh(mod) {
-  delete require.cache[require.resolve(mod)];
-  return require(mod);
-}
-
 function requireWebhookServer() {
   delete require.cache[require.resolve('../src/webhook-server')];
   try { delete require.cache[require.resolve('../src/auth')]; } catch { /* ignore */ }
