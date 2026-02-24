@@ -16,7 +16,7 @@ so that my existing voice-app routes calls through OpenClaw instead of Claude CL
    **When** the bridge module is loaded
    **Then** the exported interface is identical to `claude-bridge.js` — same method names, same parameter signatures: `query(prompt, options)`, `endSession(callId)`, `isAvailable()`
 
-2. **Given** `BRIDGE_TYPE=openclaw`, `OPENCLAW_WEBHOOK_URL=http://host:3334`, and `OPENCLAW_API_KEY=test-key` are set in the environment
+2. **Given** `BRIDGE_TYPE=openclaw`, `OPENCLAW_WEBHOOK_URL=http://host:47334`, and `OPENCLAW_API_KEY=test-key` are set in the environment
    **When** `query(prompt, options)` is called with `options = { callId, devicePrompt, accountId, peerId }`
    **Then** the bridge sends `POST /voice/query` to `OPENCLAW_WEBHOOK_URL` with body `{ "prompt": prompt, "callId": options.callId, "accountId": options.accountId, "peerId": options.peerId }`, `Authorization: Bearer <OPENCLAW_API_KEY>`, and returns the agent's response string
 
@@ -261,7 +261,7 @@ BRIDGE_TYPE=claude
 # OpenClaw Plugin (when BRIDGE_TYPE=openclaw)
 # ====================================
 # URL to OpenClaw SIP voice plugin webhook server
-OPENCLAW_WEBHOOK_URL=http://openclaw-server:3334
+OPENCLAW_WEBHOOK_URL=http://openclaw-server:47334
 
 # API key for webhook authentication (must match plugin config)
 OPENCLAW_API_KEY=your-openclaw-api-key

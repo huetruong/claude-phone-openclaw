@@ -220,6 +220,13 @@ export function generateEnvFile(config) {
     '# Claude API Server',
     `CLAUDE_API_URL=${claudeApiUrl}`,
     '',
+    '# Bridge Configuration',
+    `BRIDGE_TYPE=${config.bridge?.type || 'claude'}`,
+    ...(config.bridge?.type === 'openclaw' ? [
+      `OPENCLAW_WEBHOOK_URL=${config.bridge.openclawUrl}`,
+      `OPENCLAW_API_KEY=${config.bridge.openclawApiKey}`,
+    ] : []),
+    '',
     '# ElevenLabs TTS',
     `ELEVENLABS_API_KEY=${config.api.elevenlabs.apiKey}`,
     `ELEVENLABS_VOICE_ID=${config.devices[0].voiceId}`,

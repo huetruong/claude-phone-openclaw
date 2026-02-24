@@ -194,9 +194,10 @@ So that OpenClaw recognizes SIP voice as an available communication channel.
 **When** the operator runs `openclaw plugins install -l ./openclaw-plugin`
 **Then** OpenClaw loads the plugin without errors and the SIP voice channel appears in the registered channels list
 
-**Given** the plugin entry point (`src/index.js`) calls `api.registerChannel()` on initialization
+**Given** the plugin entry point (`src/index.js`) exports a `register(api)` function and calls `api.registerService()` on initialization
 **When** the OpenClaw gateway starts
-**Then** the plugin registers the SIP voice channel and logs `[sip-voice] channel registered` at INFO level
+**Then** the plugin starts its webhook server and logs `[sip-voice] loaded N account bindings` at INFO level
+*(Correction 2026-02-24: original spec said `api.registerChannel()` — incorrect. SIP voice is a service plugin. `api.registerChannel()` requires a full ChannelPlugin interface. Correct pattern is `api.registerService()`. See `docs/openclaw-plugin-architecture.md`.)*
 
 **Given** the plugin uses CommonJS (`require`/`module.exports`) and contains no synchronous I/O
 **When** the plugin loads inside the OpenClaw gateway event loop
@@ -214,9 +215,9 @@ So that only my authorized voice-app can communicate with the plugin.
 
 **Acceptance Criteria:**
 
-**Given** the plugin config specifies `webhookPort: 3334` and `apiKey: "test-key"`
+**Given** the plugin config specifies `webhookPort: 47334` and `apiKey: "test-key"`
 **When** the plugin starts
-**Then** an Express HTTP server listens on port 3334 and logs `[sip-voice] webhook server listening on port 3334`
+**Then** an Express HTTP server listens on port 47334 and logs `[sip-voice] webhook server listening on port 47334`
 
 **Given** a request arrives at any plugin endpoint without an `Authorization` header
 **When** the auth middleware processes the request
@@ -283,7 +284,7 @@ So that my existing voice-app routes calls through OpenClaw instead of Claude CL
 **When** the bridge module is loaded
 **Then** the exported interface is identical to `claude-bridge.js` — same method names, same parameter signatures: `query(prompt, callId, deviceConfig)`, `endSession(callId)`, `isAvailable()`
 
-**Given** `BRIDGE_TYPE=openclaw`, `OPENCLAW_WEBHOOK_URL=http://host:3334`, and `OPENCLAW_API_KEY=test-key` are set in the environment
+**Given** `BRIDGE_TYPE=openclaw`, `OPENCLAW_WEBHOOK_URL=http://host:47334`, and `OPENCLAW_API_KEY=test-key` are set in the environment
 **When** `query(prompt, callId, deviceConfig)` is called
 **Then** the bridge sends `POST /voice/query` to `OPENCLAW_WEBHOOK_URL` with body `{ "prompt": prompt, "callId": callId, "accountId": deviceConfig.accountId, "peerId": deviceConfig.peerId }`, `Authorization: Bearer <OPENCLAW_API_KEY>`, and returns `{ response: "<agent reply>" }`
 

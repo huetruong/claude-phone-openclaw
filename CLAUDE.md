@@ -114,7 +114,7 @@ The voice-app supports two backends, selected via `BRIDGE_TYPE`:
 ```bash
 # .env
 BRIDGE_TYPE=openclaw
-OPENCLAW_WEBHOOK_URL=http://openclaw-server:3334
+OPENCLAW_WEBHOOK_URL=http://openclaw-server:47334
 OPENCLAW_API_KEY=your-api-key
 ```
 
@@ -156,7 +156,7 @@ Add `accountId` to each device in `voice-app/config/devices.json`:
 
 ```yaml
 sip-voice:
-  webhookPort: 3334
+  webhookPort: 47334
   apiKey: "..."
   dmPolicy: allowlist
   accounts:
@@ -247,5 +247,6 @@ See `.env.example` for all variables. Key ones:
 - [docs/openclaw-plugin-setup.md](docs/openclaw-plugin-setup.md) - Plugin install guide
 - [voice-app/DEPLOYMENT.md](voice-app/DEPLOYMENT.md) - Production deployment
 - [voice-app/README-OUTBOUND.md](voice-app/README-OUTBOUND.md) - Outbound API
+- [docs/openclaw-plugin-architecture.md](docs/openclaw-plugin-architecture.md) - OpenClaw plugin SDK reference
 - [_bmad-output/planning-artifacts/prd.md](_bmad-output/planning-artifacts/prd.md) - PRD
 - [_bmad-output/planning-artifacts/architecture.md](_bmad-output/planning-artifacts/architecture.md) - Architecture

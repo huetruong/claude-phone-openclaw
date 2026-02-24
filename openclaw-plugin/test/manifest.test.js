@@ -37,11 +37,11 @@ test('manifest - configSchema has all required config fields', () => {
   }
 });
 
-test('manifest - webhookPort has numeric type and default 3334', () => {
+test('manifest - webhookPort has numeric type and default 47334', () => {
   const manifest = require(MANIFEST_PATH);
   const port = manifest.configSchema.webhookPort;
   assert.strictEqual(port.type, 'number');
-  assert.strictEqual(port.default, 3334);
+  assert.strictEqual(port.default, 47334);
 });
 
 test('package.json - name is openclaw-sip-voice', () => {

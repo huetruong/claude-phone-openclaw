@@ -117,7 +117,7 @@ On plugin startup: mark all non-terminal call state as ended (matches voice-call
 ### API & Communication Patterns
 
 - Transport: HTTP REST between voice-app and plugin (internal network, no TLS required for MVP)
-- Plugin webhook server: Express, port 3334
+- Plugin webhook server: Express, port 47334
 - Endpoints: `POST /voice/query`, `POST /voice/end-session`, `GET /voice/health`
 - Error handling: plugin unreachable → voice-app logs error, plays configurable unavailability message; no retry (voice calls are time-sensitive)
 - No rate limiting (trusted internal network between two servers)

@@ -316,7 +316,7 @@ No build step. No native bindings. No post-install scripts.
 **Plugin config (OpenClaw side):**
 ```yaml
 sip-voice:
-  webhookPort: 3334
+  webhookPort: 47334
   apiKey: "..."
   dmPolicy: allowlist
   accounts:
@@ -338,7 +338,7 @@ For existing `claude-phone-vitalpbx` deployments switching from the default Clau
 2. In `voice-app/.env`:
    ```
    BRIDGE_TYPE=openclaw
-   OPENCLAW_WEBHOOK_URL=http://openclaw-server:3334
+   OPENCLAW_WEBHOOK_URL=http://openclaw-server:47334
    OPENCLAW_API_KEY=your-api-key
    ```
 3. In each device entry in `devices.json`, add `"accountId": "<agent-name>"`

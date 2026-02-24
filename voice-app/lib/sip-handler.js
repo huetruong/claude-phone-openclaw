@@ -108,7 +108,7 @@ function extractVoiceLine(response) {
  * Main conversation loop
  * @param {Object} deviceConfig - Device configuration (name, prompt, voiceId, etc.) or null for default
  */
-async function conversationLoop(endpoint, dialog, callUuid, options, deviceConfig) {
+async function conversationLoop(endpoint, dialog, callUuid, options, deviceConfig, peerId) {
   const { ttsService, whisperClient, claudeBridge, wsPort, audioForkServer } = options;
 
   let session = null;
@@ -221,7 +221,7 @@ async function conversationLoop(endpoint, dialog, callUuid, options, deviceConfi
       console.log('[' + new Date().toISOString() + '] CLAUDE Querying (device: ' + deviceName + ')...');
       const claudeResponse = await claudeBridge.query(
         transcript,
-        { callId: callUuid, devicePrompt: devicePrompt, accountId: deviceConfig ? deviceConfig.accountId : undefined }
+        { callId: callUuid, devicePrompt: devicePrompt, accountId: deviceConfig ? deviceConfig.accountId : undefined, peerId: peerId }
       );
 
       // Stop hold music
@@ -348,7 +348,7 @@ async function handleInvite(req, res, options) {
       if (endpoint) endpoint.destroy().catch(function() {});
     });
 
-    await conversationLoop(endpoint, dialog, callUuid, options, deviceConfig);
+    await conversationLoop(endpoint, dialog, callUuid, options, deviceConfig, callerId);
     return { endpoint: endpoint, dialog: dialog, callerId: callerId, callUuid: callUuid };
 
   } catch (error) {
