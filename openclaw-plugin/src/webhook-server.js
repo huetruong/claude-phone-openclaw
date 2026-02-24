@@ -57,6 +57,7 @@ function createServer(config = {}) {
       // Resolve accountId → agentId.
       const agentId = bindingMap.get(accountId);
       if (!agentId) {
+        logger.warn('no agent binding for accountId', { accountId });
         return res.status(404).json({ error: 'no agent binding for accountId' });
       }
 
