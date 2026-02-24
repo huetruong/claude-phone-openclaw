@@ -80,7 +80,7 @@ The 404 body `{ error: 'no agent binding for accountId' }` matches AC 4 **exactl
 **AC 5 is fully satisfied** — `openclaw.plugin.json` already contains:
 ```json
 "configSchema": {
-  "webhookPort": { "type": "number", "default": 3334 },
+  "webhookPort": { "type": "number", "default": 47334 },
   "apiKey": { "type": "string" },
   "accounts": { "type": "array", "items": { "type": "object" } },
   "bindings": { "type": "array", "items": { "type": "object" } },
@@ -297,6 +297,7 @@ claude-opus-4-6
 
 - 2026-02-24: Implemented Story 2.2 — added `loaded N account bindings` log to activate(), added WARN log for unknown accountId, added 2 new tests (binding log + cephanie routing), updated 3 existing test assertions.
 - 2026-02-24: Code review fixes — strengthened binding count assertion, added WARN log test for unknown accountId, added zero-bindings edge case test. 204 tests pass total (96 cli + 30 voice-app + 78 plugin).
+- 2026-02-24: **POST-DEPLOYMENT NOTE** — All Dev Notes references to `activate()` and `api.getConfig()` in this story are now outdated. The plugin was fully rewritten after deployment revealed the API was incorrect. The correct function is `register(api)` (synchronous), config comes from `api.pluginConfig` (property), and the log line is emitted from `register()` not `activate()`. The binding routing logic in `webhook-server.js` is unchanged and still correct. See Story 1.1 Post-Deployment Findings and `docs/openclaw-plugin-architecture.md` for full details.
 
 ### File List
 

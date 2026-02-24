@@ -131,7 +131,7 @@ All 6 top-level fields are required by the OpenClaw plugin loader:
   "description": "SIP telephone channel for OpenClaw agents via FreePBX",
   "main": "src/index.js",
   "configSchema": {
-    "webhookPort": { "type": "number", "default": 3334 },
+    "webhookPort": { "type": "number", "default": 47334 },
     "apiKey": { "type": "string" },
     "dmPolicy": { "type": "string", "default": "allowlist" },
     "accounts": { "type": "array", "items": { "type": "object" } },
@@ -298,7 +298,7 @@ None — implementation was clean on first pass.
 ### Completion Notes List
 
 - All 4 tasks implemented following red-green-refactor cycle: 23 tests written first (all failing), then implementation created, all 23 pass.
-- `openclaw.plugin.json`: All 6 required fields present; configSchema covers all 6 config keys; webhookPort defaults to 3334.
+- `openclaw.plugin.json`: All 6 required fields present; configSchema covers all 6 config keys; webhookPort defaults to 47334.
 - `package.json`: CommonJS (no `type: module`), express ^4 dependency, no native deps.
 - `src/logger.js`: `[sip-voice]` prefix enforced inside `formatMessage()` — not at callsites; debug gated by `process.env.DEBUG`; uses console.log/warn/error appropriately.
 - `src/index.js`: async `activate(api)` calls `api.getConfig()` then `api.registerChannel()`; module-level `pluginConfig` store initialized; `getConfig()` accessor exported for future webhook handlers; logs account/binding counts at INFO level; pure CommonJS, no sync I/O.
@@ -337,3 +337,46 @@ None — implementation was clean on first pass.
 
 - 2026-02-23: Implemented Story 1.1 — Plugin scaffold and channel registration. Created openclaw-plugin directory with manifest, package.json, logger, and entry point. 23 unit tests added covering all ACs.
 - 2026-02-23: Code review — fixed 7 findings (1 High, 3 Medium, 3 Low). 29 tests now pass. Story marked done.
+- 2026-02-24: **POST-DEPLOYMENT CORRECTION** — Plugin entirely rewritten after first deploy to the openclaw gateway revealed multiple wrong API assumptions. See "Post-Deployment Findings" section below.
+
+### Post-Deployment Findings (2026-02-24)
+
+The Story 1.1 implementation was based on incorrect assumptions about the OpenClaw plugin API. All of the following were discovered when actually deploying to the openclaw gateway and observing gateway errors.
+
+**WRONG assumptions in original implementation:**
+
+| Original (Wrong) | Actual (Correct) |
+|---|---|
+| `async activate(api)` | `register(api)` (synchronous — returns undefined, not a Promise) |
+| `api.getConfig()` | `api.pluginConfig` (property, not a method) |
+| `api.registerChannel({ id, name })` | `api.registerService({ id, start, stop })` — service plugin, NOT channel plugin |
+| `module.exports = { activate, getConfig }` | `module.exports = plugin` (single plugin object with `id`, `name`, `description`, `register`) |
+| `plugin.id = 'sip-voice'` | `plugin.id = 'openclaw-sip-voice'` (must match openclaw.json `plugins.entries` key) |
+| logger included ISO timestamp in `formatMessage` | No timestamp — journald (systemd logging) adds its own; double timestamps in output |
+| `package.json` had no `openclaw.extensions` array | Must add `"openclaw": { "extensions": ["./src/index.js"] }` for plugin discovery |
+
+**Root cause:** Story 1.1 Dev Notes were written based on incomplete/incorrect API documentation. The actual OpenClaw plugin SDK (v2026.2.21) uses a different shape than documented. This was only discovered during live deployment.
+
+**Key architectural finding:** `api.registerChannel()` expects a full `ChannelPlugin` interface (outbound.sendText, config adapters, capabilities object, etc.). A service plugin that only exposes a webhook server must use `api.registerService()` instead — this is Pattern 2 from the official plugin SDK.
+
+**Corrected plugin shape:**
+```js
+const plugin = {
+  id: 'openclaw-sip-voice',
+  name: 'SIP Voice',
+  description: 'SIP telephone channel for OpenClaw agents via FreePBX',
+  register(api) {                       // synchronous, returns undefined
+    const config = api.pluginConfig || {};  // property, not method
+    api.registerService({               // service lifecycle, not channel
+      id: 'sip-voice-webhook',
+      start: async () => { /* start express server */ },
+      stop: async () => { /* graceful shutdown */ },
+    });
+  },
+};
+module.exports = plugin;
+```
+
+**All story tests updated** to match new API shape (index.test.js fully rewritten). 216 tests pass post-rewrite.
+
+**See also:** `docs/openclaw-plugin-architecture.md` — created during this fix as a permanent reference to prevent these mistakes in future plugin development.

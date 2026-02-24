@@ -3,7 +3,7 @@
 const { test } = require('node:test');
 const assert = require('node:assert');
 
-// Inject webhook-server mock before any index.js load so activate() never binds a real port.
+// Inject webhook-server mock before any index.js load so register() never binds a real port.
 // requireIndex() only clears index + logger caches; this mock stays in place for all tests.
 const _mockServerHandle = { close: (cb) => { if (cb) cb(); } };
 require.cache[require.resolve('../src/webhook-server')] = {
@@ -24,141 +24,163 @@ function requireIndex() {
   return require('../src/index');
 }
 
-function createMockApi(config = {}) {
-  const calls = { registerChannel: [], getConfig: 0 };
+function createMockApi(pluginConfig = {}) {
+  const calls = { registerService: [], registerChannel: [] };
   return {
+    pluginConfig,
+    config: {},  // OpenClawConfig — empty object is sufficient for unit tests
+    logger: {
+      info: () => {},
+      warn: () => {},
+      error: () => {},
+      debug: () => {},
+    },
+    registerService(serviceDef) {
+      calls.registerService.push(serviceDef);
+    },
     registerChannel(channelDef) {
       calls.registerChannel.push(channelDef);
     },
-    getConfig() {
-      calls.getConfig++;
-      return config;
-    },
-    _calls: calls
+    _calls: calls,
   };
 }
 
-test('index - activate() calls api.registerChannel with id sip-voice', async () => {
+// ---------------------------------------------------------------------------
+// Plugin shape
+// ---------------------------------------------------------------------------
+
+test('index - exports id, name, description, and register', () => {
+  const plugin = requireIndex();
+  assert.strictEqual(typeof plugin.id, 'string', 'Must export id string');
+  assert.strictEqual(typeof plugin.name, 'string', 'Must export name string');
+  assert.strictEqual(typeof plugin.description, 'string', 'Must export description string');
+  assert.strictEqual(typeof plugin.register, 'function', 'Must export register function');
+});
+
+test('index - id is openclaw-sip-voice', () => {
+  const plugin = requireIndex();
+  assert.strictEqual(plugin.id, 'openclaw-sip-voice');
+});
+
+test('index - does NOT export activate or getConfig (old API removed)', () => {
+  const plugin = requireIndex();
+  assert.strictEqual(typeof plugin.activate, 'undefined', 'activate must not be exported');
+  assert.strictEqual(typeof plugin.getConfig, 'undefined', 'getConfig must not be exported');
+});
+
+// ---------------------------------------------------------------------------
+// register() behaviour
+// ---------------------------------------------------------------------------
+
+test('index - register() is synchronous (returns undefined, not a Promise)', () => {
   const plugin = requireIndex();
   const api = createMockApi({ accounts: [], bindings: [] });
-  await plugin.activate(api);
-  assert.strictEqual(api._calls.registerChannel.length, 1,
-    'registerChannel must be called once');
-  assert.strictEqual(api._calls.registerChannel[0].id, 'sip-voice',
-    'Channel id must be "sip-voice"');
+  const result = plugin.register(api);
+  assert.strictEqual(result, undefined, 'register() must return undefined (synchronous)');
 });
 
-test('index - activate() includes name and description in channel registration', async () => {
+test('index - register() reads api.pluginConfig (not api.getConfig)', () => {
   const plugin = requireIndex();
+  let pluginConfigAccessed = false;
   const api = createMockApi({ accounts: [], bindings: [] });
-  await plugin.activate(api);
-  const reg = api._calls.registerChannel[0];
-  assert.ok(reg.name, 'Channel must have a name');
-  assert.ok(reg.description, 'Channel must have a description');
-});
-
-test('index - activate() calls api.getConfig()', async () => {
-  const plugin = requireIndex();
-  const api = createMockApi({ accounts: [], bindings: [] });
-  await plugin.activate(api);
-  assert.ok(api._calls.getConfig > 0, 'getConfig() must be called during activation');
-});
-
-test('index - getConfig() returns empty object before activate', () => {
-  const plugin = requireIndex();
-  const config = plugin.getConfig();
-  assert.deepStrictEqual(config, {}, 'getConfig() must return {} before activate');
-});
-
-test('index - getConfig() returns api config after activate', async () => {
-  const plugin = requireIndex();
-  const expected = { accounts: [{ id: 'morpheus' }], bindings: [{ accountId: 'morpheus', agentId: 'morpheus' }] };
-  const api = createMockApi(expected);
-  await plugin.activate(api);
-  const config = plugin.getConfig();
-  assert.deepStrictEqual(config, expected, 'getConfig() must return config from api.getConfig()');
-});
-
-test('index - activate() handles missing accounts/bindings gracefully', async () => {
-  const plugin = requireIndex();
-  const api = createMockApi({}); // no accounts or bindings in config
-  await assert.doesNotReject(plugin.activate(api),
-    'activate() must not throw when accounts/bindings are absent');
-});
-
-test('index - exports activate and getConfig functions', () => {
-  const plugin = requireIndex();
-  assert.strictEqual(typeof plugin.activate, 'function', 'Must export activate function');
-  assert.strictEqual(typeof plugin.getConfig, 'function', 'Must export getConfig function');
-});
-
-// H1: Verify activate() actually calls logger.info with 'channel registered' (AC #2)
-test('index - activate() logs [sip-voice] channel registered at INFO level', async () => {
-  const plugin = requireIndex();
-  const api = createMockApi({ accounts: [], bindings: [] });
-
-  const logLines = [];
-  const origLog = console.log;
-  console.log = (...args) => logLines.push(args.join(' '));
-  try {
-    await plugin.activate(api);
-  } finally {
-    console.log = origLog;
-  }
-
-  assert.strictEqual(logLines.length, 2, 'activate() must emit exactly two INFO log lines');
-  assert.ok(logLines[1].includes('[sip-voice]'), 'Log must include [sip-voice] prefix');
-  assert.ok(logLines[1].includes('channel registered'), 'Log must include "channel registered"');
-  assert.ok(logLines[1].includes('INFO'), 'Log must be at INFO level');
-});
-
-// H1: Verify account/binding counts are included in the log
-test('index - activate() includes account and binding counts in log', async () => {
-  const plugin = requireIndex();
-  const api = createMockApi({
-    accounts: [{ id: 'morpheus' }, { id: 'cephanie' }],
-    bindings: [{ accountId: 'morpheus', agentId: 'morpheus' }]
+  Object.defineProperty(api, 'pluginConfig', {
+    get() { pluginConfigAccessed = true; return { accounts: [], bindings: [] }; },
+    configurable: true,
   });
-
-  const logLines = [];
-  const origLog = console.log;
-  console.log = (...args) => logLines.push(args.join(' '));
-  try {
-    await plugin.activate(api);
-  } finally {
-    console.log = origLog;
-  }
-
-  assert.ok(logLines[1].includes('"accounts":2'), 'Log must include accounts count');
-  assert.ok(logLines[1].includes('"bindings":1'), 'Log must include bindings count');
+  plugin.register(api);
+  assert.ok(pluginConfigAccessed, 'register() must read api.pluginConfig');
 });
 
-test('index - activate() logs [sip-voice] loaded N account bindings', async () => {
+test('index - register() calls api.registerService() once', () => {
+  const plugin = requireIndex();
+  const api = createMockApi({ accounts: [], bindings: [] });
+  plugin.register(api);
+  assert.strictEqual(api._calls.registerService.length, 1, 'registerService must be called once');
+});
+
+test('index - register() does NOT call api.registerChannel()', () => {
+  const plugin = requireIndex();
+  const api = createMockApi({ accounts: [], bindings: [] });
+  plugin.register(api);
+  assert.strictEqual(api._calls.registerChannel.length, 0, 'registerChannel must NOT be called');
+});
+
+test('index - registered service has id sip-voice-webhook', () => {
+  const plugin = requireIndex();
+  const api = createMockApi({ accounts: [], bindings: [] });
+  plugin.register(api);
+  const service = api._calls.registerService[0];
+  assert.strictEqual(service.id, 'sip-voice-webhook');
+});
+
+test('index - registered service has async start and stop functions', () => {
+  const plugin = requireIndex();
+  const api = createMockApi({ accounts: [], bindings: [] });
+  plugin.register(api);
+  const service = api._calls.registerService[0];
+  assert.strictEqual(typeof service.start, 'function', 'service must have start()');
+  assert.strictEqual(typeof service.stop, 'function', 'service must have stop()');
+});
+
+test('index - service.start() calls createServer and startServer', async () => {
+  const plugin = requireIndex();
+  const api = createMockApi({ apiKey: 'test-key', accounts: [], bindings: [] });
+  plugin.register(api);
+  const service = api._calls.registerService[0];
+  // Should not throw — webhook-server mock returns a handle
+  await assert.doesNotReject(service.start(), 'service.start() must not throw');
+});
+
+test('index - service.stop() is safe to call before start()', async () => {
+  const plugin = requireIndex();
+  const api = createMockApi({ accounts: [], bindings: [] });
+  plugin.register(api);
+  const service = api._calls.registerService[0];
+  await assert.doesNotReject(service.stop(), 'service.stop() before start() must not throw');
+});
+
+test('index - register() handles missing accounts/bindings gracefully', () => {
+  const plugin = requireIndex();
+  const api = createMockApi({}); // no accounts or bindings
+  assert.doesNotThrow(() => plugin.register(api), 'register() must not throw with empty config');
+});
+
+test('index - register() handles undefined pluginConfig gracefully', () => {
+  const plugin = requireIndex();
+  const api = createMockApi(undefined);
+  assert.doesNotThrow(() => plugin.register(api), 'register() must not throw with undefined pluginConfig');
+});
+
+// ---------------------------------------------------------------------------
+// Logging
+// ---------------------------------------------------------------------------
+
+test('index - register() logs loaded N account bindings', () => {
   const plugin = requireIndex();
   const api = createMockApi({
-    accounts: [{ id: 'morpheus' }, { id: 'cephanie' }],
+    accounts: [{ id: 'morpheus' }, { id: 'dewey' }],
     bindings: [
       { accountId: 'morpheus', agentId: 'morpheus' },
-      { accountId: 'cephanie', agentId: 'cephanie' }
-    ]
+      { accountId: 'dewey', agentId: 'dewey' },
+    ],
   });
 
   const logLines = [];
   const origLog = console.log;
   console.log = (...args) => logLines.push(args.join(' '));
   try {
-    await plugin.activate(api);
+    plugin.register(api);
   } finally {
     console.log = origLog;
   }
 
-  const bindingsLog = logLines.find((line) => line.includes('loaded') && line.includes('account bindings'));
-  assert.ok(bindingsLog, 'activate() must log "loaded N account bindings"');
+  const bindingsLog = logLines.find(l => l.includes('loaded') && l.includes('account bindings'));
+  assert.ok(bindingsLog, 'register() must log "loaded N account bindings"');
   assert.ok(bindingsLog.includes('[sip-voice]'), 'Log must include [sip-voice] prefix');
-  assert.ok(bindingsLog.includes('loaded 2 account bindings'), 'Log must include exact text "loaded 2 account bindings"');
+  assert.ok(bindingsLog.includes('loaded 2 account bindings'), 'Must include exact count');
 });
 
-test('index - activate() logs "loaded 0 account bindings" when no bindings configured', async () => {
+test('index - register() logs "loaded 0 account bindings" when no bindings configured', () => {
   const plugin = requireIndex();
   const api = createMockApi({});
 
@@ -166,39 +188,49 @@ test('index - activate() logs "loaded 0 account bindings" when no bindings confi
   const origLog = console.log;
   console.log = (...args) => logLines.push(args.join(' '));
   try {
-    await plugin.activate(api);
+    plugin.register(api);
   } finally {
     console.log = origLog;
   }
 
-  const bindingsLog = logLines.find((line) => line.includes('loaded') && line.includes('account bindings'));
-  assert.ok(bindingsLog, 'activate() must log "loaded N account bindings" even with no bindings');
-  assert.ok(bindingsLog.includes('loaded 0 account bindings'), 'Log must include exact text "loaded 0 account bindings"');
+  const bindingsLog = logLines.find(l => l.includes('loaded') && l.includes('account bindings'));
+  assert.ok(bindingsLog, 'register() must log binding count even when zero');
+  assert.ok(bindingsLog.includes('loaded 0 account bindings'), 'Must log "loaded 0 account bindings"');
 });
 
-// M3: Verify activate() rethrows registration errors (after logging them)
-test('index - activate() rethrows if registerChannel throws', async () => {
+test('index - register() includes account and binding counts in log data', () => {
+  const plugin = requireIndex();
+  const api = createMockApi({
+    accounts: [{ id: 'morpheus' }, { id: 'dewey' }],
+    bindings: [{ accountId: 'morpheus', agentId: 'morpheus' }],
+  });
+
+  const logLines = [];
+  const origLog = console.log;
+  console.log = (...args) => logLines.push(args.join(' '));
+  try {
+    plugin.register(api);
+  } finally {
+    console.log = origLog;
+  }
+
+  const bindingsLog = logLines.find(l => l.includes('loaded') && l.includes('account bindings'));
+  assert.ok(bindingsLog.includes('"accounts":2'), 'Log must include accounts count');
+  assert.ok(bindingsLog.includes('"bindings":1'), 'Log must include bindings count');
+});
+
+// ---------------------------------------------------------------------------
+// Error handling
+// ---------------------------------------------------------------------------
+
+test('index - register() propagates if api.registerService throws', () => {
   const plugin = requireIndex();
   const api = createMockApi({});
-  api.registerChannel = () => { throw new Error('duplicate channel id'); };
+  api.registerService = () => { throw new Error('service conflict'); };
 
-  await assert.rejects(
-    plugin.activate(api),
-    /duplicate channel id/,
-    'activate() must rethrow errors from registerChannel'
+  assert.throws(
+    () => plugin.register(api),
+    /service conflict/,
+    'register() must propagate errors from registerService'
   );
-});
-
-// M2: Verify getConfig() returns a copy, not the live internal reference
-test('index - getConfig() returns a shallow copy, not the internal reference', async () => {
-  const plugin = requireIndex();
-  const api = createMockApi({ accounts: [{ id: 'morpheus' }] });
-  await plugin.activate(api);
-
-  const config = plugin.getConfig();
-  config.accounts = ['mutated'];
-
-  const config2 = plugin.getConfig();
-  assert.deepStrictEqual(config2.accounts, [{ id: 'morpheus' }],
-    'Mutating getConfig() result must not affect internal pluginConfig');
 });

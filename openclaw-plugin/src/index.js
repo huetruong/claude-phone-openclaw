@@ -1,60 +1,156 @@
 'use strict';
 
+const path = require('path');
+const fs = require('fs');
+const { pathToFileURL } = require('url');
+const { execSync } = require('child_process');
+
 const logger = require('./logger');
 const sessionStore = require('./session-store');
 const { createServer, startServer } = require('./webhook-server');
 
-let pluginConfig = {};
-// eslint-disable-next-line no-unused-vars
-let _server = null; // stored for future graceful shutdown
+// ---------------------------------------------------------------------------
+// extensionAPI loader
+//
+// OpenClaw exposes runEmbeddedPiAgent and agent-path helpers via
+// dist/extensionAPI.js (ESM). It is NOT part of the plugin SDK (api.runtime
+// has no agent invocation method). We locate the file by searching standard
+// node_modules paths then falling back to `npm root -g`.
+//
+// See docs/openclaw-plugin-architecture.md for full background.
+// ---------------------------------------------------------------------------
 
-async function activate(api) {
+function findExtensionAPIPath() {
+  const candidates = (require.resolve.paths('openclaw') || []).map(
+    p => path.join(p, 'openclaw', 'dist', 'extensionAPI.js')
+  );
+
   try {
-    pluginConfig = api.getConfig() || {};
+    const npmGlobal = execSync('npm root -g', { encoding: 'utf8', stdio: 'pipe' }).trim();
+    candidates.push(path.join(npmGlobal, 'openclaw', 'dist', 'extensionAPI.js'));
+  } catch { /* ignore */ }
 
-    api.registerChannel({
-      id: 'sip-voice',
-      name: 'SIP Voice',
-      description: 'SIP telephone channel for OpenClaw agents'
-    });
+  for (const candidate of candidates) {
+    if (fs.existsSync(candidate)) return candidate;
+  }
 
-    const accounts = pluginConfig.accounts || [];
-    const bindings = pluginConfig.bindings || [];
-    logger.info(`loaded ${bindings.length} account bindings`);
-    logger.info('channel registered', {
+  throw new Error(
+    '[sip-voice] Cannot locate openclaw dist/extensionAPI.js — ' +
+    'ensure openclaw is installed globally and accessible from this process'
+  );
+}
+
+let _extAPI = null;
+
+async function getExtensionAPI() {
+  if (_extAPI) return _extAPI;
+  const apiPath = findExtensionAPIPath();
+  _extAPI = await import(pathToFileURL(apiPath).href);
+  return _extAPI;
+}
+
+// ---------------------------------------------------------------------------
+// Plugin
+// ---------------------------------------------------------------------------
+
+let _server = null;
+
+const plugin = {
+  id: 'openclaw-sip-voice',
+  name: 'SIP Voice',
+  description: 'SIP telephone channel for OpenClaw agents via FreePBX',
+
+  /**
+   * Called synchronously by the OpenClaw plugin loader.
+   * Heavy async work (webhook server start, extensionAPI import) is deferred
+   * to api.registerService() which runs async start/stop lifecycle.
+   *
+   * @param {import('openclaw/plugin-sdk').OpenClawPluginApi} api
+   */
+  register(api) {
+    const config = api.pluginConfig || {};
+    const accounts = config.accounts || [];
+    const bindings = config.bindings || [];
+
+    logger.info(`loaded ${bindings.length} account bindings`, {
       accounts: accounts.length,
-      bindings: bindings.length
+      bindings: bindings.length,
     });
 
     // Reap stale sessions from prior gateway runs (OpenClaw bug #3290).
     sessionStore.clear();
 
-    // Build queryAgent callback that routes to the OpenClaw agent via api.
-    const queryAgent = async (agentId, sessionId, prompt, peerId) => {
-      return api.queryAgent(agentId, {
+    // ------------------------------------------------------------------
+    // queryAgent — routes a voice prompt to a named OpenClaw agent.
+    //
+    // Uses runEmbeddedPiAgent from extensionAPI.js to run the agent
+    // in-process. Session is scoped per-agent per-call so concurrent
+    // calls to different agents are fully isolated.
+    // ------------------------------------------------------------------
+    const queryAgent = async (agentId, sessionId, prompt /*, peerId */) => {
+      const ext = await getExtensionAPI();
+      const ocConfig = api.config;
+
+      const sessionKey = `sip-voice:${agentId}:${sessionId}`;
+      const storePath = path.dirname(ext.resolveStorePath(ocConfig?.session?.store));
+      const agentDir = ext.resolveAgentDir(ocConfig, agentId);
+      const workspaceDir = ext.resolveAgentWorkspaceDir(ocConfig, agentId);
+      const sessionFile = path.join(storePath, 'sip-voice', `${agentId}-${sessionId}.jsonl`);
+
+      // Ensure workspace dir exists before running agent.
+      await ext.ensureAgentWorkspace({ dir: workspaceDir });
+
+      const result = await ext.runEmbeddedPiAgent({
         sessionId,
-        message: prompt,
-        identity: peerId ?? undefined
+        sessionKey,
+        messageProvider: 'sip-voice',
+        sessionFile,
+        workspaceDir,
+        config: ocConfig,
+        prompt,
+        timeoutMs: config.agentTimeoutMs || 30000,
+        runId: `sip:${sessionId}:${Date.now()}`,
+        lane: 'voice',
+        agentDir,
       });
+
+      // Concatenate non-error text payloads into a single response string.
+      const text = (result.payloads || [])
+        .filter(p => p.text && !p.isError)
+        .map(p => p.text.trim())
+        .join(' ')
+        .trim();
+
+      return text || null;
     };
 
-    // Start webhook server with bindings, accounts, and query callback.
-    const app = createServer({
-      apiKey: pluginConfig.apiKey,
-      bindings,
-      accounts,
-      queryAgent
+    // ------------------------------------------------------------------
+    // Background service — Express webhook server lifecycle.
+    // Receives POST /voice/query from voice-app, calls queryAgent,
+    // returns agent response.
+    // ------------------------------------------------------------------
+    api.registerService({
+      id: 'sip-voice-webhook',
+
+      start: async () => {
+        const app = createServer({
+          apiKey: config.apiKey,
+          bindings,
+          accounts,
+          queryAgent,
+        });
+        const port = config.webhookPort || 47334;
+        _server = await startServer(app, port);
+      },
+
+      stop: async () => {
+        if (_server) {
+          await new Promise((resolve) => _server.close(resolve));
+          _server = null;
+        }
+      },
     });
-    const port = pluginConfig.webhookPort || 3334;
-    _server = await startServer(app, port);
-  } catch (err) {
-    logger.error('channel registration failed', { message: err.message });
-    throw err;
-  }
-}
+  },
+};
 
-function getConfig() {
-  return { ...pluginConfig };
-}
-
-module.exports = { activate, getConfig };
+module.exports = plugin;

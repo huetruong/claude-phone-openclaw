@@ -12,9 +12,9 @@ so that only my authorized voice-app can communicate with the plugin.
 
 ## Acceptance Criteria
 
-1. **Given** the plugin config specifies `webhookPort: 3334` and `apiKey: "test-key"`
+1. **Given** the plugin config specifies `webhookPort: 47334` and `apiKey: "test-key"`
    **When** the plugin starts
-   **Then** an Express HTTP server listens on port 3334 and logs `[sip-voice] webhook server listening on port 3334`
+   **Then** an Express HTTP server listens on port 47334 and logs `[sip-voice] webhook server listening on port 47334`
 
 2. **Given** a request arrives at any plugin endpoint without an `Authorization` header
    **When** the auth middleware processes the request
@@ -66,7 +66,7 @@ so that only my authorized voice-app can communicate with the plugin.
 - [x] Task 4: Integrate webhook server into plugin lifecycle via `src/index.js` (AC: #1)
   - [x] In `activate(api)`, after channel registration, call `createServer(config)` and `startServer(app, port)`
   - [x] Pass `apiKey` from `api.getConfig()` to auth middleware
-  - [x] Pass `webhookPort` from config (default: 3334)
+  - [x] Pass `webhookPort` from config (default: 47334)
   - [x] Store server reference for future graceful shutdown
   - [x] Clear session store on startup (stale call reaper pattern)
 
@@ -215,7 +215,7 @@ const { createServer, startServer } = require('./webhook-server');
 sessionStore.clear(); // Stale call reaper
 
 const app = createServer({ apiKey: pluginConfig.apiKey });
-const port = pluginConfig.webhookPort || 3334;
+const port = pluginConfig.webhookPort || 47334;
 await startServer(app, port);
 ```
 

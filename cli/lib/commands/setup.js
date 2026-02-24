@@ -315,11 +315,15 @@ async function setupVoiceServer(config) {
     config.deployment.mode = 'voice-server';
   }
 
-  // Step 1: 3CX/SIP Configuration
+  // Step 1: AI Backend (Bridge)
+  console.log(chalk.bold('\n🔌 AI Backend'));
+  config = await setupBridge(config);
+
+  // Step 2: 3CX/SIP Configuration
   console.log(chalk.bold('\n☎️  SIP Configuration'));
   config = await setupSIP(config);
 
-  // Step 2: API Server Connection
+  // Step 3: API Server Connection
   console.log(chalk.bold('\n🖥️  API Server Connection'));
   const apiServerAnswers = await inquirer.prompt([
     {
@@ -356,15 +360,15 @@ async function setupVoiceServer(config) {
   config.server = config.server || {};
   config.server.claudeApiPort = parseInt(apiServerAnswers.apiServerPort, 10);
 
-  // Step 3: API Keys (for TTS/STT)
+  // Step 4: API Keys (for TTS/STT)
   console.log(chalk.bold('\n📡 API Configuration'));
   config = await setupAPIKeys(config);
 
-  // Step 4: Device Configuration
+  // Step 5: Device Configuration
   console.log(chalk.bold('\n🤖 Device Configuration'));
   config = await setupDevice(config);
 
-  // Step 5: Server Configuration (IP only, no API port)
+  // Step 6: Server Configuration (IP only, no API port)
   console.log(chalk.bold('\n⚙️  Server Configuration'));
   const localIp = getLocalIP();
   const serverAnswers = await inquirer.prompt([
@@ -425,19 +429,23 @@ async function setupBoth(config) {
     config.deployment.mode = 'both';
   }
 
-  // Step 1: API Keys
+  // Step 1: AI Backend (Bridge)
+  console.log(chalk.bold('\n🔌 AI Backend'));
+  config = await setupBridge(config);
+
+  // Step 2: API Keys
   console.log(chalk.bold('\n📡 API Configuration'));
   config = await setupAPIKeys(config);
 
-  // Step 2: 3CX/SIP Configuration
+  // Step 3: 3CX/SIP Configuration
   console.log(chalk.bold('\n☎️  SIP Configuration'));
   config = await setupSIP(config);
 
-  // Step 3: Device Configuration
+  // Step 4: Device Configuration
   console.log(chalk.bold('\n🤖 Device Configuration'));
   config = await setupDevice(config);
 
-  // Step 4: Server Configuration
+  // Step 5: Server Configuration
   console.log(chalk.bold('\n⚙️  Server Configuration'));
   config = await setupServer(config);
 
@@ -686,12 +694,81 @@ function createDefaultConfig() {
       drachtio: generateSecret(),
       freeswitch: generateSecret()
     },
+    bridge: {
+      type: 'claude',          // 'claude' or 'openclaw'
+      openclawUrl: '',         // webhook URL when type=openclaw
+      openclawApiKey: ''       // shared API key
+    },
     devices: [],
     paths: {
       voiceApp: path.join(getProjectRoot(), 'voice-app'),
       claudeApiServer: path.join(getProjectRoot(), 'claude-api-server')
     }
   };
+}
+
+/**
+ * Setup AI backend bridge configuration
+ * @param {object} config - Current config
+ * @returns {Promise<object>} Updated config
+ */
+async function setupBridge(config) {
+  if (!config.bridge) {
+    config.bridge = { type: 'claude', openclawUrl: '', openclawApiKey: '' };
+  }
+
+  const { bridgeType } = await inquirer.prompt([{
+    type: 'list',
+    name: 'bridgeType',
+    message: 'AI backend:',
+    default: config.bridge.type || 'claude',
+    choices: [
+      { name: 'Claude Code CLI (via claude-api-server)', value: 'claude' },
+      { name: 'OpenClaw (via channel plugin)', value: 'openclaw' }
+    ]
+  }]);
+
+  config.bridge.type = bridgeType;
+
+  if (bridgeType === 'openclaw') {
+    const answers = await inquirer.prompt([
+      {
+        type: 'input',
+        name: 'openclawUrl',
+        message: 'OpenClaw webhook URL (e.g., http://192.168.1.100:47334):',
+        default: config.bridge.openclawUrl || '',
+        validate: (input) => {
+          if (!input || input.trim() === '') {
+            return 'Webhook URL is required';
+          }
+          try {
+            // eslint-disable-next-line no-undef
+            new URL(input);
+            return true;
+          } catch {
+            return 'Invalid URL format';
+          }
+        }
+      },
+      {
+        type: 'password',
+        name: 'openclawApiKey',
+        message: 'OpenClaw API key (shared secret):',
+        default: config.bridge.openclawApiKey || '',
+        validate: (input) => {
+          if (!input || input.trim() === '') {
+            return 'API key is required';
+          }
+          return true;
+        }
+      }
+    ]);
+
+    config.bridge.openclawUrl = answers.openclawUrl;
+    config.bridge.openclawApiKey = answers.openclawApiKey;
+  }
+
+  return config;
 }
 
 /**

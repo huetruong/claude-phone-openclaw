@@ -134,7 +134,8 @@ async function runConversationLoop(endpoint, dialog, callUuid, options) {
     initialContext = null,
     skipGreeting = false,
     deviceConfig = null,
-    maxTurns = 20
+    maxTurns = 20,
+    peerId = null
   } = options;
 
   // Extract devicePrompt and voiceId from deviceConfig (for Cephanie etc)
@@ -176,7 +177,7 @@ async function runConversationLoop(endpoint, dialog, callUuid, options) {
       logger.info('Priming Claude with outbound context (non-blocking)', { callUuid });
       claudeBridge.query(
         `[SYSTEM CONTEXT - DO NOT REPEAT]: You just called the user to tell them: "${initialContext}". They have answered. Now listen to their response and help them.`,
-        { callId: callUuid, devicePrompt: devicePrompt, accountId: deviceConfig?.accountId, isSystemPrime: true }
+        { callId: callUuid, devicePrompt: devicePrompt, accountId: deviceConfig?.accountId, peerId, isSystemPrime: true }
       ).catch(err => logger.warn('Prime query failed', { callUuid, error: err.message }));
     }
 
@@ -358,7 +359,7 @@ async function runConversationLoop(endpoint, dialog, callUuid, options) {
       logger.info('Querying Claude', { callUuid });
       const claudeResponse = await claudeBridge.query(
         transcript,
-        { callId: callUuid, devicePrompt: devicePrompt, accountId: deviceConfig?.accountId }
+        { callId: callUuid, devicePrompt: devicePrompt, accountId: deviceConfig?.accountId, peerId }
       );
 
       // 4. Stop hold music
