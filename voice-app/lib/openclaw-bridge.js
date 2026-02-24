@@ -59,8 +59,9 @@ async function query(prompt, options = {}) {
       }
     );
 
-    console.log('[' + timestamp + '] OPENCLAW Response received');
-    return response.data.response;
+    console.log('[' + new Date().toISOString() + '] OPENCLAW Response received');
+    const responseText = response.data && response.data.response;
+    return responseText || "I received an empty response. Please try again.";
 
   } catch (error) {
     // Plugin unreachable — return friendly message (matches claude-bridge.js pattern)

@@ -1,6 +1,6 @@
 # Story 1.4: OpenClaw Bridge & Bridge Loader
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -399,7 +399,7 @@ None — implementation matched story spec exactly; no debugging required.
 
 ### File List
 
-voice-app/lib/openclaw-bridge.js (NEW)
+voice-app/lib/openclaw-bridge.js (NEW, MODIFIED by review)
 voice-app/lib/bridge-loader.js (NEW)
 voice-app/index.js (MODIFIED)
 voice-app/test/openclaw-bridge.test.js (NEW)
@@ -409,3 +409,4 @@ voice-app/test/bridge-loader.test.js (NEW)
 ## Change Log
 
 - 2026-02-24: Story 1.4 implemented — OpenClaw bridge and bridge loader. New `openclaw-bridge.js` provides drop-in replacement for `claude-bridge.js` routing calls through OpenClaw plugin HTTP API. New `bridge-loader.js` enables `BRIDGE_TYPE` env var selection. `index.js` updated to use bridge loader. `.env.example` updated with bridge configuration vars. 21 new tests added.
+- 2026-02-24: Code review fixes — M1: null guard on `response.data.response` (returns friendly fallback if plugin returns malformed 200 body); also guards `response.data` itself being null. M2: ran `npm install` in `cli/` to fix pre-existing `ERR_MODULE_NOT_FOUND: axios` that caused `npm test` to always fail at cli step. L1: fresh timestamp for "Response received" log (was stale from query start). L3: replaced closed-port race in tests with persistent net server that destroys sockets (no race window). All tests green: cli 96/96, voice-app 22/22, plugin 74/74.

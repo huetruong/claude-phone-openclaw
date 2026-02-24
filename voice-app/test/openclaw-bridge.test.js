@@ -4,6 +4,7 @@ const { describe, it, before, after, beforeEach } = require('node:test');
 const assert = require('node:assert');
 const express = require('express');
 const http = require('http');
+const net = require('net');
 
 // ---------------------------------------------------------------------------
 // Test server setup
@@ -33,7 +34,8 @@ app.get('/voice/health', (req, res) => {
 
 let server;
 let testPort;
-let refusedPort; // port with no server listening (for ECONNREFUSED tests)
+let refuseServer; // TCP server that immediately destroys connections — reliable ECONNRESET/ECONNREFUSED
+let refusedPort;
 
 function requireFreshBridge() {
   delete require.cache[require.resolve('../lib/openclaw-bridge')];
@@ -51,13 +53,12 @@ describe('openclaw-bridge', () => {
     await new Promise(resolve => server.listen(0, resolve));
     testPort = server.address().port;
 
-    // Acquire a port we know will refuse connections by briefly starting
-    // and then closing a server — the OS will refuse new connections to
-    // that port once the server is closed.
-    const tempServer = http.createServer();
-    await new Promise(resolve => tempServer.listen(0, resolve));
-    refusedPort = tempServer.address().port;
-    await new Promise(resolve => tempServer.close(resolve));
+    // Persistent TCP server that immediately destroys incoming sockets.
+    // Stays alive for the full test run — no race window compared to the
+    // "start then close" pattern where another process could grab the port.
+    refuseServer = net.createServer(sock => sock.destroy());
+    await new Promise(resolve => refuseServer.listen(0, resolve));
+    refusedPort = refuseServer.address().port;
 
     process.env.OPENCLAW_WEBHOOK_URL = 'http://127.0.0.1:' + testPort;
     process.env.OPENCLAW_API_KEY = 'test-key';
@@ -65,6 +66,7 @@ describe('openclaw-bridge', () => {
 
   after(async () => {
     if (server) await new Promise(resolve => server.close(resolve));
+    if (refuseServer) await new Promise(resolve => refuseServer.close(resolve));
     delete process.env.OPENCLAW_WEBHOOK_URL;
     delete process.env.OPENCLAW_API_KEY;
   });
