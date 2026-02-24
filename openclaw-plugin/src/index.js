@@ -28,8 +28,21 @@ async function activate(api) {
     // Reap stale sessions from prior gateway runs (OpenClaw bug #3290).
     sessionStore.clear();
 
-    // Start webhook server.
-    const app = createServer({ apiKey: pluginConfig.apiKey });
+    // Build queryAgent callback that routes to the OpenClaw agent via api.
+    const queryAgent = async (agentId, sessionId, prompt, peerId) => {
+      return await api.queryAgent(agentId, {
+        sessionId,
+        message: prompt,
+        identity: peerId || undefined
+      });
+    };
+
+    // Start webhook server with bindings and query callback.
+    const app = createServer({
+      apiKey: pluginConfig.apiKey,
+      bindings,
+      queryAgent
+    });
     const port = pluginConfig.webhookPort || 3334;
     _server = await startServer(app, port);
   } catch (err) {
