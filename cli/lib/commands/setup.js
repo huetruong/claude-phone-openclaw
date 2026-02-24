@@ -934,6 +934,12 @@ async function setupDevice(config) {
     },
     {
       type: 'input',
+      name: 'accountId',
+      message: 'Account ID (OpenClaw agent binding):',
+      default: existingDevice?.accountId || ((answers) => answers.name.trim().toLowerCase()),
+    },
+    {
+      type: 'input',
       name: 'extension',
       message: 'SIP extension number (e.g., 9000):',
       default: existingDevice?.extension || '9000',
@@ -1021,6 +1027,7 @@ async function setupDevice(config) {
 
   const device = {
     name: answers.name,
+    accountId: answers.accountId.trim() || answers.name.trim().toLowerCase(),
     extension: answers.extension,
     authId: answers.authId,
     password: answers.password,
