@@ -3,10 +3,24 @@
 const { test } = require('node:test');
 const assert = require('node:assert');
 
+// Inject webhook-server mock before any index.js load so activate() never binds a real port.
+// requireIndex() only clears index + logger caches; this mock stays in place for all tests.
+const _mockServerHandle = { close: (cb) => { if (cb) cb(); } };
+require.cache[require.resolve('../src/webhook-server')] = {
+  id: require.resolve('../src/webhook-server'),
+  filename: require.resolve('../src/webhook-server'),
+  loaded: true,
+  exports: {
+    createServer: () => ({ _isMock: true }),
+    startServer: async () => _mockServerHandle
+  }
+};
+
 function requireIndex() {
   delete require.cache[require.resolve('../src/index')];
-  // Also clear logger cache to avoid cross-test state
+  // Also clear logger and session-store caches to avoid cross-test state
   try { delete require.cache[require.resolve('../src/logger')]; } catch { /* ignore */ }
+  try { delete require.cache[require.resolve('../src/session-store')]; } catch { /* ignore */ }
   return require('../src/index');
 }
 
