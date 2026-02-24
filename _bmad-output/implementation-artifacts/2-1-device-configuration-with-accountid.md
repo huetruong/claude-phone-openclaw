@@ -1,6 +1,6 @@
 # Story 2.1: Device Configuration with accountId
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -301,6 +301,7 @@ claude-sonnet-4-6
 - voice-app/lib/query-routes.js (modified)
 - voice-app/test/device-registry.test.js (new)
 - voice-app/test/accountid-flow.test.js (new)
+- _bmad-output/implementation-artifacts/sprint-status.yaml (modified)
 
 ## Change Log
 

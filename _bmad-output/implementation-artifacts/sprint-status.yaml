@@ -48,7 +48,7 @@ development_status:
   epic-1-retrospective: optional
 
   epic-2: in-progress
-  2-1-device-configuration-with-accountid: review
+  2-1-device-configuration-with-accountid: done
   2-2-plugin-agent-bindings-and-multi-extension-routing: backlog
   2-3-concurrent-session-isolation: backlog
   epic-2-retrospective: optional

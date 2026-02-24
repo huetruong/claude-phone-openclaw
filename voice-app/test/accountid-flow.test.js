@@ -118,10 +118,65 @@ describe('conversation-loop accountId flow', () => {
       'accountId should be undefined when deviceConfig is null');
   });
 
-  it('openclaw-bridge includes accountId in POST body (coverage from Story 1.4)', () => {
-    // This coverage already exists in openclaw-bridge.test.js:
-    // "includes accountId and peerId in body when provided"
-    // Verified: bridge.query({ accountId: 'morpheus' }) → POST body.accountId === 'morpheus'
-    assert.ok(true, 'accountId coverage confirmed in openclaw-bridge.test.js');
+  it('passes accountId from deviceConfig to bridge query (main conversation query path)', async () => {
+    const capturedCalls = [];
+
+    const mockBridge = {
+      query: (prompt, opts) => {
+        capturedCalls.push({ prompt, opts });
+        return Promise.resolve('Response text');
+      },
+      endSession: () => Promise.resolve()
+    };
+
+    const mockDialog = { on: () => {}, off: () => {} };
+    const mockEndpoint = {
+      play: () => Promise.resolve(),
+      forkAudioStart: () => Promise.resolve(),
+      forkAudioStop: () => Promise.resolve(),
+      api: () => Promise.resolve(),
+      on: () => {},
+      off: () => {}
+    };
+
+    const mockSession = {
+      setCaptureEnabled: () => {},
+      waitForUtterance: () => Promise.resolve({ audio: Buffer.alloc(100), reason: 'vad' }),
+      forceFinalize: () => {}
+    };
+
+    const mockAudioForkServer = {
+      expectSession: () => Promise.resolve(mockSession),
+      cancelExpectation: () => {},
+      emit: () => {}
+    };
+
+    const mockTtsService = { generateSpeech: () => Promise.resolve('http://tts/url') };
+    const mockWhisperClient = {
+      transcribe: () => Promise.resolve('Hello there')
+    };
+
+    const { runConversationLoop } = require('../lib/conversation-loop');
+
+    await runConversationLoop(
+      mockEndpoint,
+      mockDialog,
+      'test-call-main-query',
+      {
+        audioForkServer: mockAudioForkServer,
+        whisperClient: mockWhisperClient,
+        claudeBridge: mockBridge,
+        ttsService: mockTtsService,
+        wsPort: 8080,
+        skipGreeting: true,
+        deviceConfig: { name: 'Morpheus', accountId: 'morpheus', prompt: 'You are Morpheus.' },
+        maxTurns: 1
+      }
+    );
+
+    const mainQuery = capturedCalls.find(c => !c.opts.isSystemPrime);
+    assert.ok(mainQuery, 'main conversation query should be called');
+    assert.strictEqual(mainQuery.opts.accountId, 'morpheus',
+      'main conversation query should include accountId from deviceConfig');
   });
 });

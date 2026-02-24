@@ -23,7 +23,7 @@ const CONFIG_PATH = path.join(__dirname, '../config/devices.json');
 const MORPHEUS_DEFAULT = {
   name: 'Morpheus',
   extension: '9000',
-  accountId: 'Morpheus',
+  accountId: 'morpheus',
   authId: 'Au0XZPTpJY',
   password: 'DGHwMW6v25',
   voiceId: 'JAgnJveGGUh4qy4kh6dF',

@@ -123,5 +123,18 @@ describe('DeviceRegistry', () => {
 
       assert.ok(defaultDevice.accountId, 'MORPHEUS_DEFAULT should have accountId set');
     });
+
+    it('extension lookup returns device with accountId when config file is missing', () => {
+      // When devices.json is absent the registry falls back to MORPHEUS_DEFAULT
+      // keyed under extension '9000' — verify accountId survives that path
+      setupFsMock(false, {});
+
+      const registry = requireFreshRegistry();
+      const device = registry.getByExtension('9000');
+      restoreFs();
+
+      assert.ok(device, 'should return a device for extension 9000 even without config file');
+      assert.ok(device.accountId, 'fallback device should have accountId set');
+    });
   });
 });
