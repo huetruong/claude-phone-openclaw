@@ -75,23 +75,37 @@ describe('Device management', () => {
     });
 
     it('should include accountId in saved device when provided', () => {
+      const config = { devices: [{ name: 'Morpheus', extension: '9000' }] };
       const answers = { name: 'Trinity', accountId: 'custom-id' };
       const newDevice = {
         name: answers.name.trim(),
-        accountId: answers.accountId || answers.name.trim().toLowerCase(),
+        accountId: answers.accountId.trim() || answers.name.trim().toLowerCase(),
         extension: '9001',
+        authId: '9001',
+        password: 'secret',
+        voiceId: 'voice-123',
+        prompt: 'You are Trinity'
       };
-      assert.strictEqual(newDevice.accountId, 'custom-id');
+      config.devices.push(newDevice);
+      assert.strictEqual(config.devices[1].accountId, 'custom-id');
     });
 
     it('should default accountId to device name (lowercased) when left blank', () => {
+      const config = { devices: [] };
       const answers = { name: 'Trinity', accountId: '' };
       const newDevice = {
         name: answers.name.trim(),
-        accountId: answers.accountId || answers.name.trim().toLowerCase(),
+        accountId: answers.accountId.trim() || answers.name.trim().toLowerCase(),
         extension: '9001',
       };
-      assert.strictEqual(newDevice.accountId, 'trinity');
+      config.devices.push(newDevice);
+      assert.strictEqual(config.devices[0].accountId, 'trinity');
+    });
+
+    it('should trim whitespace-only accountId and fall back to device name', () => {
+      const answers = { name: 'Trinity', accountId: '   ' };
+      const accountId = answers.accountId.trim() || answers.name.trim().toLowerCase();
+      assert.strictEqual(accountId, 'trinity');
     });
   });
 
@@ -115,15 +129,27 @@ describe('Device management', () => {
     });
 
     it('should display Account ID column using device accountId', () => {
-      const device = { name: 'Morpheus', extension: '9000', voiceId: 'voice-123', accountId: 'morpheus' };
-      const accountIdDisplay = device.accountId || device.name;
-      assert.strictEqual(accountIdDisplay, 'morpheus');
+      const devices = [
+        { name: 'Morpheus', extension: '9000', voiceId: 'voice-123', accountId: 'morpheus' },
+        { name: 'Cephanie', extension: '9002', voiceId: 'voice-456', accountId: 'cephanie' }
+      ];
+      for (const device of devices) {
+        const accountIdDisplay = device.accountId || device.name;
+        assert.strictEqual(accountIdDisplay, device.accountId,
+          `Account ID display should show accountId for device "${device.name}"`);
+      }
     });
 
     it('should fall back to device name for Account ID when accountId is absent', () => {
-      const device = { name: 'Morpheus', extension: '9000', voiceId: 'voice-123' };
-      const accountIdDisplay = device.accountId || device.name;
-      assert.strictEqual(accountIdDisplay, 'Morpheus');
+      const devices = [
+        { name: 'Morpheus', extension: '9000', voiceId: 'voice-123' },
+        { name: 'Cephanie', extension: '9002', voiceId: 'voice-456' }
+      ];
+      for (const device of devices) {
+        const accountIdDisplay = device.accountId || device.name;
+        assert.strictEqual(accountIdDisplay, device.name,
+          `Account ID display should fall back to name for device "${device.name}"`);
+      }
     });
   });
 

@@ -1,6 +1,6 @@
 # Story 2.4: CLI Device Add accountId Support
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -153,13 +153,14 @@ claude-sonnet-4-6
 ### Completion Notes List
 
 - Added `accountId` inquirer prompt to `device add` after `name` field; defaults to `name.trim().toLowerCase()` when blank
-- Added `accountId` field to `newDevice` object in `add.js` with fallback: `answers.accountId || answers.name.trim().toLowerCase()`
-- Added same `accountId` prompt and field in `setup.js` `setupDevice()` function for consistency
-- Updated `list.js` ASCII table: added `Account ID` column with dynamic width (min 10); fallback to `device.name` for backward compat
-- Updated `horizontalLine` width calculation to account for new column (+3 for `│ ` separator)
-- Added 4 new tests to `device.test.js`: accountId fixture, provided value, blank fallback, list column fallback
+- `accountId` uses `.trim()` before fallback check to guard against whitespace-only input
+- Added `accountId` confirmation line to `device add` success output
+- Added same `accountId` prompt and field in `setup.js` `setupDevice()` function; pre-populates from `existingDevice.accountId` on re-run
+- Updated `list.js` ASCII table: added `Account ID` column with dynamic width (min 10); fallback to `device.name` for backward compat; restored `nameWidth` min to 10
+- Added 5 new tests to `device.test.js` including whitespace-only trim edge case; improved list tests to cover multiple devices
 - Verified `start.js` devices.json generation passes full device object — `accountId` flows through automatically; no code change needed
-- Full test suite: 208 tests pass (100 CLI + 30 voice-app + 78 plugin), 0 failures, 0 regressions
+- Code review fixes applied: M1 (setup re-run default), M2 (whitespace trim), M3 (test quality), L1 (success output), L2 (nameWidth min)
+- Full test suite: 209 tests pass (101 CLI + 30 voice-app + 78 plugin), 0 failures, 0 regressions
 
 ### File List
 
@@ -170,4 +171,5 @@ claude-sonnet-4-6
 
 ### Change Log
 
-- feat(story-2-4): Added `accountId` prompt to `device add` and setup wizard; added `Account ID` column to `device list`; 4 new tests added; all 208 tests pass
+- feat(story-2-4): Added `accountId` prompt to `device add` and setup wizard; added `Account ID` column to `device list`; 5 new tests; all 209 tests pass
+- fix(story-2-4): Code review fixes — whitespace trim, setup re-run default, success output, test quality, nameWidth min restored

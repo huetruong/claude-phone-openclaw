@@ -112,7 +112,7 @@ export async function deviceAddCommand() {
   // Add device to config
   const newDevice = {
     name: answers.name.trim(),
-    accountId: answers.accountId || answers.name.trim().toLowerCase(),
+    accountId: answers.accountId.trim() || answers.name.trim().toLowerCase(),
     extension: answers.extension,
     authId: answers.authId || answers.extension,
     password: answers.password,
@@ -134,6 +134,7 @@ export async function deviceAddCommand() {
   console.log(chalk.bold.green('\n✓ Device added successfully!'));
   console.log(chalk.gray('\nDevice details:'));
   console.log(chalk.gray(`  Name: ${newDevice.name}`));
+  console.log(chalk.gray(`  Account ID: ${newDevice.accountId}`));
   console.log(chalk.gray(`  Extension: ${newDevice.extension}`));
   console.log(chalk.gray(`  Voice: ${voiceResult.name} (${newDevice.voiceId})`));
   console.log(chalk.yellow('\n⚠ Restart services to apply changes:'));

@@ -936,7 +936,7 @@ async function setupDevice(config) {
       type: 'input',
       name: 'accountId',
       message: 'Account ID (OpenClaw agent binding):',
-      default: (answers) => answers.name.trim().toLowerCase(),
+      default: existingDevice?.accountId || ((answers) => answers.name.trim().toLowerCase()),
     },
     {
       type: 'input',
@@ -1027,7 +1027,7 @@ async function setupDevice(config) {
 
   const device = {
     name: answers.name,
-    accountId: answers.accountId || answers.name.trim().toLowerCase(),
+    accountId: answers.accountId.trim() || answers.name.trim().toLowerCase(),
     extension: answers.extension,
     authId: answers.authId,
     password: answers.password,

@@ -23,7 +23,7 @@ export async function deviceListCommand() {
   }
 
   // Calculate column widths
-  const nameWidth = Math.max(4, ...config.devices.map(d => d.name.length)); // "Name" min
+  const nameWidth = Math.max(10, ...config.devices.map(d => d.name.length));
   const extWidth = 9; // "Extension"
   const accountIdWidth = Math.max(10, ...config.devices.map(d => (d.accountId || d.name).length)); // "Account ID" min
   const voiceWidth = 30;
