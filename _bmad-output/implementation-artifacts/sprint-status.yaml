@@ -44,7 +44,7 @@ development_status:
   1-1-plugin-scaffold-and-channel-registration: done
   1-2-webhook-server-and-api-key-authentication: done
   1-3-voice-query-routing: done
-  1-4-openclaw-bridge-and-bridge-loader: backlog
+  1-4-openclaw-bridge-and-bridge-loader: review
   epic-1-retrospective: optional
 
   epic-2: backlog
