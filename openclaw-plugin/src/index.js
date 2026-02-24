@@ -20,6 +20,7 @@ async function activate(api) {
 
     const accounts = pluginConfig.accounts || [];
     const bindings = pluginConfig.bindings || [];
+    logger.info(`loaded ${bindings.length} account bindings`);
     logger.info('channel registered', {
       accounts: accounts.length,
       bindings: bindings.length

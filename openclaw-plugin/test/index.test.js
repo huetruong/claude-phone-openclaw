@@ -106,10 +106,10 @@ test('index - activate() logs [sip-voice] channel registered at INFO level', asy
     console.log = origLog;
   }
 
-  assert.strictEqual(logLines.length, 1, 'activate() must emit exactly one INFO log line');
-  assert.ok(logLines[0].includes('[sip-voice]'), 'Log must include [sip-voice] prefix');
-  assert.ok(logLines[0].includes('channel registered'), 'Log must include "channel registered"');
-  assert.ok(logLines[0].includes('INFO'), 'Log must be at INFO level');
+  assert.strictEqual(logLines.length, 2, 'activate() must emit exactly two INFO log lines');
+  assert.ok(logLines[1].includes('[sip-voice]'), 'Log must include [sip-voice] prefix');
+  assert.ok(logLines[1].includes('channel registered'), 'Log must include "channel registered"');
+  assert.ok(logLines[1].includes('INFO'), 'Log must be at INFO level');
 });
 
 // H1: Verify account/binding counts are included in the log
@@ -129,8 +129,51 @@ test('index - activate() includes account and binding counts in log', async () =
     console.log = origLog;
   }
 
-  assert.ok(logLines[0].includes('"accounts":2'), 'Log must include accounts count');
-  assert.ok(logLines[0].includes('"bindings":1'), 'Log must include bindings count');
+  assert.ok(logLines[1].includes('"accounts":2'), 'Log must include accounts count');
+  assert.ok(logLines[1].includes('"bindings":1'), 'Log must include bindings count');
+});
+
+test('index - activate() logs [sip-voice] loaded N account bindings', async () => {
+  const plugin = requireIndex();
+  const api = createMockApi({
+    accounts: [{ id: 'morpheus' }, { id: 'cephanie' }],
+    bindings: [
+      { accountId: 'morpheus', agentId: 'morpheus' },
+      { accountId: 'cephanie', agentId: 'cephanie' }
+    ]
+  });
+
+  const logLines = [];
+  const origLog = console.log;
+  console.log = (...args) => logLines.push(args.join(' '));
+  try {
+    await plugin.activate(api);
+  } finally {
+    console.log = origLog;
+  }
+
+  const bindingsLog = logLines.find((line) => line.includes('loaded') && line.includes('account bindings'));
+  assert.ok(bindingsLog, 'activate() must log "loaded N account bindings"');
+  assert.ok(bindingsLog.includes('[sip-voice]'), 'Log must include [sip-voice] prefix');
+  assert.ok(bindingsLog.includes('loaded 2 account bindings'), 'Log must include exact text "loaded 2 account bindings"');
+});
+
+test('index - activate() logs "loaded 0 account bindings" when no bindings configured', async () => {
+  const plugin = requireIndex();
+  const api = createMockApi({});
+
+  const logLines = [];
+  const origLog = console.log;
+  console.log = (...args) => logLines.push(args.join(' '));
+  try {
+    await plugin.activate(api);
+  } finally {
+    console.log = origLog;
+  }
+
+  const bindingsLog = logLines.find((line) => line.includes('loaded') && line.includes('account bindings'));
+  assert.ok(bindingsLog, 'activate() must log "loaded N account bindings" even with no bindings');
+  assert.ok(bindingsLog.includes('loaded 0 account bindings'), 'Log must include exact text "loaded 0 account bindings"');
 });
 
 // M3: Verify activate() rethrows registration errors (after logging them)

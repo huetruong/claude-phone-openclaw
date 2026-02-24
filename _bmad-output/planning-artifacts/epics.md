@@ -384,6 +384,34 @@ So that two simultaneous calls to extension 9000 never share context.
 **When** a network interruption occurs and recovers
 **Then** both registrations re-establish automatically without manual intervention (FR3 brownfield verified)
 
+### Story 2.4: CLI Device Add accountId Support
+
+As an operator,
+I want the `claude-phone device add` command to prompt for an `accountId` field,
+So that new devices are OpenClaw-ready without manual JSON editing.
+
+**Acceptance Criteria:**
+
+**Given** the operator runs `claude-phone device add`
+**When** the interactive prompts are presented
+**Then** a new prompt asks for `accountId` after the existing fields, defaulting to the device `name` if left blank
+
+**Given** the operator provides an `accountId` value during `device add`
+**When** the device is saved to `~/.claude-phone/config.json`
+**Then** the device object includes `"accountId": "<value>"` alongside the existing fields
+
+**Given** the operator leaves `accountId` blank during `device add`
+**When** the device is saved
+**Then** the device object includes `"accountId": "<name>"` using the device name as fallback (consistent with Story 2.1 voice-app fallback behavior)
+
+**Given** the operator runs `claude-phone device list`
+**When** the device table is displayed
+**Then** the table includes an `Account ID` column showing each device's `accountId` value
+
+**Given** `devices.json` is generated or updated from CLI config
+**When** the docker config is written
+**Then** each device entry in `devices.json` includes the `accountId` field from the CLI config
+
 ## Epic 3: Caller Access Control
 
 Only trusted callers reach agents. Unknown callers hear a rejection message and are disconnected. The operator controls access policy per extension.

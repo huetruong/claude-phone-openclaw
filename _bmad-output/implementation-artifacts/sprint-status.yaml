@@ -49,7 +49,8 @@ development_status:
 
   epic-2: in-progress
   2-1-device-configuration-with-accountid: done
-  2-2-plugin-agent-bindings-and-multi-extension-routing: backlog
+  2-2-plugin-agent-bindings-and-multi-extension-routing: done
+  2-4-cli-device-add-accountid-support: backlog
   2-3-concurrent-session-isolation: backlog
   epic-2-retrospective: optional
 

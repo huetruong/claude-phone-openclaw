@@ -164,6 +164,23 @@ test('webhook - POST /voice/query passes correct args to queryAgent', async () =
   });
 });
 
+test('webhook - POST /voice/query routes cephanie accountId to cephanie agentId', async () => {
+  const calls = [];
+  const queryAgent = async (agentId, sessionId, prompt, peerId) => {
+    calls.push({ agentId, sessionId, prompt, peerId });
+    return 'hello from Cephanie';
+  };
+  await withServer(makeConfig({ queryAgent }), async (server) => {
+    const res = await request(server, {
+      path: '/voice/query', method: 'POST', headers: AUTH
+    }, { prompt: 'test prompt', callId: 'call-cephanie', accountId: 'cephanie', peerId: '+15559999999' });
+    assert.strictEqual(res.status, 200);
+    assert.deepStrictEqual(res.body, { response: 'hello from Cephanie' });
+    assert.strictEqual(calls.length, 1);
+    assert.strictEqual(calls[0].agentId, 'cephanie', 'cephanie accountId must route to cephanie agentId');
+  });
+});
+
 // ── POST /voice/query — session management ───────────────────────────────────
 
 test('webhook - POST /voice/query creates session store entry for new callId', async () => {
@@ -245,6 +262,25 @@ test('webhook - POST /voice/query unknown accountId returns 404', async () => {
     assert.strictEqual(res.status, 404);
     assert.deepStrictEqual(res.body, { error: 'no agent binding for accountId' });
   });
+});
+
+test('webhook - POST /voice/query unknown accountId logs WARN', async () => {
+  const warnLines = [];
+  const origWarn = console.warn;
+  console.warn = (...args) => warnLines.push(args.join(' '));
+  try {
+    await withServer(makeConfig(), async (server) => {
+      await request(server, {
+        path: '/voice/query', method: 'POST', headers: AUTH
+      }, { prompt: 'hello', callId: 'uuid-1', accountId: 'ghost-agent', peerId: '+1' });
+    });
+  } finally {
+    console.warn = origWarn;
+  }
+  const matched = warnLines.some((line) =>
+    line.includes('WARN') && line.includes('no agent binding for accountId')
+  );
+  assert.ok(matched, 'Must log WARN "no agent binding for accountId" for unknown accountId');
 });
 
 // ── POST /voice/query — agent error returns 503 ─────────────────────────────
