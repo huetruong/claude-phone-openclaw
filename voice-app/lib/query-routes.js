@@ -309,6 +309,7 @@ router.post('/query', async (req, res) => {
       response = await claudeBridge.query(fullPrompt, {
         callId,
         devicePrompt,
+        accountId: device ? device.accountId : undefined,
         timeout
       });
     }

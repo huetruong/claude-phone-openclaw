@@ -2,6 +2,7 @@
   "9000": {
     "name": "Assistant",
     "extension": "9000",
+    "accountId": "morpheus",
     "authId": "your-3cx-auth-id",
     "password": "your-3cx-password",
     "voiceId": "your-elevenlabs-voice-id",
@@ -10,6 +11,7 @@
   "9002": {
     "name": "ServerBot",
     "extension": "9002",
+    "accountId": "serverbot",
     "authId": "another-auth-id",
     "password": "another-password",
     "voiceId": "another-voice-id",
