@@ -16,7 +16,8 @@ import {
   validateVoiceId,
   validateExtension,
   validateIP,
-  validateHostname
+  validateHostname,
+  parseAllowFrom
 } from '../validators.js';
 import { getLocalIP, getProjectRoot } from '../utils.js';
 import { isRaspberryPi } from '../platform.js';
@@ -699,6 +700,9 @@ function createDefaultConfig() {
       openclawUrl: '',         // webhook URL when type=openclaw
       openclawApiKey: ''       // shared API key
     },
+    region: {
+      defaultCountry: 'US'     // ISO 3166-1 alpha-2, used for phone number parsing
+    },
     devices: [],
     paths: {
       voiceApp: path.join(getProjectRoot(), 'voice-app'),
@@ -903,6 +907,24 @@ async function setupAPIKeys(config) {
     config.api.openai = { apiKey: openAIKey, validated: true };
   }
 
+  // Country/region for phone number parsing
+  console.log(chalk.bold('\n🌍 Regional Settings'));
+  const regionAnswers = await inquirer.prompt([{
+    type: 'input',
+    name: 'defaultCountry',
+    message: 'Default country code for phone numbers (ISO 3166-1, e.g. US, GB, AU):',
+    default: config.region?.defaultCountry || 'US',
+    validate: (input) => {
+      if (!input || !/^[A-Z]{2}$/.test(input.trim().toUpperCase())) {
+        return 'Enter a 2-letter country code (e.g. US, GB, AU, CA, DE)';
+      }
+      return true;
+    },
+    filter: (input) => input.trim().toUpperCase()
+  }]);
+
+  config.region = { ...config.region, defaultCountry: regionAnswers.defaultCountry };
+
   return config;
 }
 
@@ -1074,6 +1096,16 @@ async function setupDevice(config) {
         }
         return true;
       }
+    },
+    {
+      type: 'input',
+      name: 'allowFrom',
+      message: 'Allowed caller numbers (comma-separated, leave blank for no restriction):',
+      default: existingDevice?.allowFrom ? existingDevice.allowFrom.join(', ') : '',
+      validate: (input) => {
+        const { error } = parseAllowFrom(input, config.region?.defaultCountry);
+        return error || true;
+      }
     }
   ]);
 
@@ -1102,6 +1134,7 @@ async function setupDevice(config) {
     voiceSpinner.succeed(`Voice ID validated: ${voiceValidation.name}`);
   }
 
+  const { numbers: allowFromNumbers } = parseAllowFrom(answers.allowFrom || '', config.region?.defaultCountry);
   const device = {
     name: answers.name,
     accountId: answers.accountId.trim() || answers.name.trim().toLowerCase(),
@@ -1109,7 +1142,8 @@ async function setupDevice(config) {
     authId: answers.authId,
     password: answers.password,
     voiceId: answers.voiceId,
-    prompt: answers.prompt
+    prompt: answers.prompt,
+    ...(allowFromNumbers.length > 0 && { allowFrom: allowFromNumbers })
   };
 
   // Replace first device or add new
