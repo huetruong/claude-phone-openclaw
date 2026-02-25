@@ -25,8 +25,8 @@ FR4: The system can handle concurrent inbound calls to the same extension with f
 **Caller Authentication & Access Control**
 
 FR5: The system can validate an inbound caller's phone number against a per-extension `allowFrom` allowlist before invoking an agent
-FR6: The system can reject calls from unknown callers with a configurable audio message, without invoking an agent
-FR7: An operator can configure `dmPolicy` per extension (`allowlist`, `pairing`, `open`) to control caller access rules
+FR6: The system can reject calls from unknown callers (not in `allowFrom`) with a silent hangup, without invoking an agent
+FR7: ~~An operator can configure `dmPolicy` per extension (`allowlist`, `pairing`, `open`) to control caller access rules~~ **REMOVED** — `allowFrom` empty/missing = allow all is sufficient; no separate `dmPolicy` field needed (Story 3.2 code review decision)
 FR8: The webhook endpoint can authenticate requests using an API key, rejecting unauthenticated requests with a 401 response
 
 **Conversation & Session Management**
@@ -85,7 +85,7 @@ NFR-S2: OpenClaw webhook API key passed via environment variable only — never 
 NFR-S3: Caller phone numbers logged at DEBUG level only — excluded from INFO, WARN, and ERROR output in production
 NFR-S4: No call audio persisted beyond the in-memory STT buffer — zero recordings stored to disk
 NFR-S5: Webhook endpoint returns HTTP 401 for requests missing a valid API key, before any agent invocation
-NFR-S6: `dmPolicy: allowlist` is the mandatory default for any extension exposed to a DID/PSTN number
+NFR-S6: Any extension exposed to a DID/PSTN number MUST configure a non-empty `allowFrom` list — an empty or missing `allowFrom` allows all callers through
 
 **Reliability**
 
@@ -137,8 +137,8 @@ NFR-C3: A `region.defaultCountry` (ISO 3166-1 alpha-2) MUST be configured during
 | FR3 | Epic 2 | Multi-extension SIP registration (brownfield) |
 | FR4 | Epic 2 | Concurrent isolated sessions |
 | FR5 | Epic 3 | Validate caller against allowFrom allowlist |
-| FR6 | Epic 3 | Reject unknown callers with audio message |
-| FR7 | Epic 3 | Configure dmPolicy per extension |
+| FR6 | Epic 3 | Reject unknown callers (not in allowFrom) — silent hangup |
+| FR7 | ~~Epic 3~~ | ~~Configure dmPolicy per extension~~ **REMOVED** |
 | FR8 | Epic 1 | Webhook API key authentication |
 | FR9 | Epic 1 | Pass caller phone number as peerId |
 | FR10 | Epic 4 | Independent voice/agent sessions |
@@ -177,8 +177,8 @@ An operator can configure multiple extensions, each bound to a distinct agent, w
 **FRs covered:** FR2, FR3, FR4, FR26, FR28, FR29
 
 ### Epic 3: Caller Access Control
-Only trusted callers reach agents. Unknown callers hear a rejection message and are disconnected. The operator controls access policy per extension.
-**FRs covered:** FR5, FR6, FR7
+Only trusted callers reach agents. Unknown callers are silently disconnected. Operators configure `allowFrom` per extension — empty means open, populated means allowlist-only.
+**FRs covered:** FR5, FR6
 
 ### Epic 4: Call Quality & Session Lifecycle
 Calls are smooth — hold music plays during agent processing (no dead air), hangups are clean, in-flight queries are aborted, sessions don't orphan, errors produce graceful audio messages, and logging is PII-safe.
@@ -425,7 +425,7 @@ So that new devices are OpenClaw-ready without manual JSON editing.
 
 ## Epic 3: Caller Access Control
 
-Only trusted callers reach agents. Unknown callers hear a rejection message and are disconnected. The operator controls access policy per extension.
+Only trusted callers reach agents. Unknown callers are disconnected. The operator controls access policy per extension.
 
 ### Story 3.1: Caller Allowlist Validation
 
@@ -459,33 +459,27 @@ So that only trusted phone numbers can reach my agents.
 **When** completing the Regional Settings step
 **Then** a `region.defaultCountry` (ISO 3166-1 alpha-2) is saved to config and used as the fallback country for phone number parsing (NFR-C3)
 
-### Story 3.2: Unknown Caller Rejection & DM Policy
+### Story 3.2: Unknown Caller Rejection
 
 As an operator,
-I want unknown callers to hear a configurable rejection message and be disconnected, with configurable access policy per extension,
+I want unknown callers to be disconnected immediately,
 So that spammers and unauthorized callers never reach my agents.
+
+> **Design decision (Story 3.2 code review):** `dmPolicy` field removed — `allowFrom` empty/missing = allow all callers is sufficient and simpler. No separate policy field needed.
 
 **Acceptance Criteria:**
 
-**Given** an inbound call from an unknown caller (not in `allowFrom`) arrives on a `dmPolicy: "allowlist"` extension
+**Given** an inbound call from an unknown caller (not in `allowFrom`) arrives on an extension with a populated `allowFrom` list
 **When** the voice-app rejects the call
-**Then** the caller hears a configurable audio rejection message before the call is disconnected
+**Then** the call is disconnected immediately (silent hangup) — no agent invoked, no session created
 
-**Given** the `dmPolicy` field is not set for an extension that is exposed to a DID/PSTN number
-**When** the voice-app loads the device configuration
-**Then** `dmPolicy` defaults to `"allowlist"` (NFR-S6 — mandatory default for DID-exposed extensions)
-
-**Given** `dmPolicy` is set to `"open"` for an extension
+**Given** `allowFrom` is empty or not set for an extension
 **When** any caller dials that extension
-**Then** all callers are accepted regardless of `allowFrom` (suitable only for internal PBX extensions with no PSTN exposure)
+**Then** all callers are accepted (no restriction configured — NFR-S6: DID-exposed extensions MUST configure `allowFrom`)
 
-**Given** `dmPolicy` is set to `"pairing"` for an extension
-**When** an unknown caller dials that extension
-**Then** the caller receives a pairing code and instructions to verify via another channel (Growth scope — stub implementation acceptable at MVP)
-
-**Given** a call is rejected due to `dmPolicy` enforcement
+**Given** a call is rejected due to allowlist enforcement
 **When** the rejection occurs
-**Then** the agent is never invoked, no session is created, and the event is logged at INFO level as `[sip-voice] call rejected: unknown caller on extension <ext>` (without the phone number)
+**Then** the event is logged at INFO level as `[sip-voice] call rejected: unknown caller on extension <ext>` (without the phone number)
 
 ## Epic 4: Call Quality & Session Lifecycle
 
@@ -644,12 +638,12 @@ So that agents can resolve a user's callback number from their identity across c
 
 **Acceptance Criteria:**
 
-**Given** the plugin config contains `identityLinks: { "hue": ["sip-voice:+15551234567"] }`
+**Given** the plugin config contains `identityLinks: { "operator": ["sip-voice:+15551234567"] }`
 **When** the plugin starts
 **Then** the identity links are loaded and available for lookup, and the plugin logs `[sip-voice] loaded 1 identity link(s)`
 
-**Given** an OpenClaw agent needs to call back user "hue"
-**When** the plugin resolves the identity "hue" via identityLinks
+**Given** an OpenClaw agent needs to call back user "operator"
+**When** the plugin resolves the identity "operator" via identityLinks
 **Then** the plugin extracts the phone number `+15551234567` from the `sip-voice:` prefixed entry
 
 **Given** an identity has multiple `sip-voice:` entries (e.g., `["sip-voice:+15551234567", "sip-voice:+15559876543"]`)

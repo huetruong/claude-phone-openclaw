@@ -158,16 +158,15 @@ Add `accountId` to each device in `voice-app/config/devices.json`:
 sip-voice:
   webhookPort: 47334
   apiKey: "..."
-  dmPolicy: allowlist
   accounts:
     - id: morpheus
       extension: "9000"
-      allowFrom: ["+15551234567"]
+      allowFrom: ["+15551234567"]   # empty/missing = allow all callers
   bindings:
     - accountId: morpheus
       agentId: morpheus
   identityLinks:
-    hue: ["sip-voice:+15551234567"]
+    operator: ["sip-voice:+15551234567"]
 ```
 
 ## Plugin Installation
@@ -232,8 +231,8 @@ See `.env.example` for all variables. Key ones:
 
 ## Security Rules
 
-- `allowFrom` per-extension allowlist enforced before any agent invocation
-- `dmPolicy: allowlist` mandatory default for DID-exposed extensions
+- `allowFrom` per-extension allowlist enforced before any agent invocation — empty/missing = allow all callers
+- DID-exposed extensions MUST configure a non-empty `allowFrom` list
 - Webhook API key required on all plugin endpoints — 401 before processing
 - SIP credentials: never logged at any level
 - Caller phone numbers (`peerId`): DEBUG level only, excluded from INFO/WARN/ERROR

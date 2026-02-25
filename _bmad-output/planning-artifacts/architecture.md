@@ -6,7 +6,7 @@ completedAt: '2026-02-22'
 inputDocuments: ['_bmad-output/planning-artifacts/prd.md', 'docs/TROUBLESHOOTING.md', 'CLAUDE.md']
 workflowType: 'architecture'
 project_name: 'claude-phone-vitalpbx'
-user_name: 'Hue'
+user_name: 'Operator'
 date: '2026-02-22'
 ---
 
@@ -21,7 +21,7 @@ _This document builds collaboratively through step-by-step discovery. Sections a
 **Functional Requirements (31 total):**
 
 - Call Routing & Extension Management (FR1–FR4): Multi-extension SIP registration, concurrent isolated sessions, extension → agent mapping
-- Caller Authentication & Access Control (FR5–FR8): `allowFrom` allowlist, `dmPolicy` enforcement, unknown caller rejection, webhook API key auth
+- Caller Authentication & Access Control (FR5–FR6, FR8): `allowFrom` allowlist, unknown caller rejection (silent hangup), webhook API key auth. FR7 (`dmPolicy`) removed — `allowFrom` empty/missing = allow all is sufficient.
 - Conversation & Session Management (FR9–FR13): `peerId` passing, voice/agent session independence, hangup cleanup, in-flight query abort, goodbye detection
 - Audio Processing & UX (FR14–FR17): STT, TTS with per-agent voice, SIP MOH on hold, graceful unavailability message
 - Outbound Calling (FR18–FR20): Agent-initiated and API-triggered outbound, identity resolution via `identityLinks`
@@ -109,8 +109,9 @@ On plugin startup: mark all non-terminal call state as ended (matches voice-call
 
 ### Authentication & Security
 
-- voice-app boundary: `allowFrom` per-extension allowlist checked before agent invocation
+- voice-app boundary: `allowFrom` per-extension allowlist checked before agent invocation — empty/missing `allowFrom` = allow all; populated = enforce list
 - Plugin boundary: API key (Bearer token) on `POST /voice/query` and `POST /voice/end-session`; unauthenticated requests → 401 before any processing
+- No `dmPolicy` field — removed after Story 3.2 code review; `allowFrom` semantics are sufficient
 - SIP credentials: `devices.json`, chmod 600, never logged
 - Caller phone numbers: DEBUG level only, excluded from INFO/WARN/ERROR
 
@@ -344,7 +345,7 @@ claude-phone-freepbx/                  ← repo root (rename from claude-phone-v
 | FR Group | Location |
 |---|---|
 | FR1–FR4 Call routing | `voice-app/lib/openclaw-bridge.js` + `devices.json` |
-| FR5–FR8 Caller auth | `openclaw-bridge.js` (allowFrom) + `openclaw-plugin/src/auth.js` (API key) |
+| FR5–FR6, FR8 Caller auth | `conversation-loop.js` (allowFrom) + `openclaw-plugin/src/auth.js` (API key). FR7 removed. |
 | FR9–FR13 Session mgmt | `openclaw-bridge.js` (endSession) + `openclaw-plugin/src/session-store.js` |
 | FR14–FR17 Audio/UX | existing voice-app (unchanged) |
 | FR18–FR20 Outbound | `openclaw-plugin/src/index.js` → POST /api/outbound-call |
