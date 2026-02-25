@@ -170,14 +170,6 @@ async function runConversationLoop(endpoint, dialog, callUuid, options) {
     logger.info('Call ended (dialog destroyed)', { callUuid });
   };
 
-  // ── Caller allowlist check (Story 3.2, FR6) ──
-  if (!checkAllowFrom(deviceConfig, peerId)) {
-    logger.info(`[sip-voice] call rejected: unknown caller on extension ${deviceConfig?.extension}`, { callUuid });
-    logger.debug('Rejected caller details', { callUuid, peerId });
-    try { dialog.destroy(); } catch (e) { /* already destroyed */ }
-    return;
-  }
-
   try {
     logger.info('Conversation loop starting', {
       callUuid,

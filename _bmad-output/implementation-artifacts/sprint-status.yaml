@@ -54,13 +54,13 @@ development_status:
   2-3-concurrent-session-isolation: done
   epic-2-retrospective: done  # epic-1-2-retro-2026-02-24.md (combined with Epic 1)
 
-  epic-3: in-progress
+  epic-3: done
   3-1-caller-allowlist-validation: done
   3-2-unknown-caller-rejection-and-dm-policy: done
   epic-3-retrospective: done  # epic-3-retro-2026-02-25.md
 
-  epic-4: backlog
-  4-1-independent-session-lifecycle: backlog
+  epic-4: in-progress
+  4-1-independent-session-lifecycle: review
   4-2-in-flight-query-abort-on-hangup: backlog
   4-3-hold-music-and-unavailability-message: backlog
   4-4-plugin-lifecycle-and-pii-safe-logging: backlog
