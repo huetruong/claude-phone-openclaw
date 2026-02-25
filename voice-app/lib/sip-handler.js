@@ -4,6 +4,8 @@
  */
 
 const { setTimeout: sleep } = require('node:timers/promises');
+const { checkAllowFrom } = require('./conversation-loop');
+const logger = require('./logger');
 
 // Audio cue URLs
 const READY_BEEP_URL = 'http://127.0.0.1:3000/static/ready-beep.wav';
@@ -110,6 +112,14 @@ function extractVoiceLine(response) {
  */
 async function conversationLoop(endpoint, dialog, callUuid, options, deviceConfig, peerId) {
   const { ttsService, whisperClient, claudeBridge, wsPort, audioForkServer } = options;
+
+  // ── Caller allowlist check ──
+  if (!checkAllowFrom(deviceConfig, peerId)) {
+    logger.info(`[sip-voice] call rejected: unknown caller on extension ${deviceConfig?.extension}`, { callUuid });
+    logger.debug('Rejected caller details', { callUuid, peerId });
+    try { dialog.destroy(); } catch (e) { /* already destroyed */ }
+    return;
+  }
 
   let session = null;
   let forkRunning = false;
@@ -328,6 +338,14 @@ async function handleInvite(req, res, options) {
   }
 
   console.log('[' + new Date().toISOString() + '] CALL Incoming from: ' + callerId + ' to ext: ' + (dialedExt || 'unknown'));
+
+  // ── Caller allowlist check — reject BEFORE answering ──
+  if (!checkAllowFrom(deviceConfig, callerId)) {
+    logger.info(`[sip-voice] call rejected: unknown caller on extension ${deviceConfig?.extension}`);
+    logger.debug('Rejected caller details', { peerId: callerId });
+    res.send(603);
+    return;
+  }
 
   try {
     // Strip video from SDP to avoid FreeSWITCH 488 error with unsupported video codecs
