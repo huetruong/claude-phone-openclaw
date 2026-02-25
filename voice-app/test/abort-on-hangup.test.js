@@ -191,6 +191,7 @@ describe('abort-on-hangup: conversation loop abort', () => {
     );
 
     assert.strictEqual(calls.forkAudioStopped, true, 'audio fork must be stopped');
+    assert.strictEqual(calls.dtmfOff, true, 'DTMF handler must be removed');
     assert.strictEqual(calls.cancelExpectation, true, 'session expectations must be cancelled');
     assert.strictEqual(calls.dialogOffDestroy, true, 'dialog destroy listener must be removed');
   });

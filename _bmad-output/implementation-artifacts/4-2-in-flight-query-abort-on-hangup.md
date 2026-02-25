@@ -1,6 +1,6 @@
 # Story 4.2: In-Flight Query Abort on Hangup
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -213,6 +213,7 @@ Patterns from recent work:
 ## Change Log
 
 - 2026-02-25: Implemented in-flight query abort on hangup — AbortController wired through conversation loop → bridges → axios. Both openclaw-bridge and claude-bridge updated in lockstep. Plugin verified to handle client disconnect gracefully. ESLint globals updated for AbortController/AbortSignal. 8 new tests added (245 total, 0 failures).
+- 2026-02-25: Code review fixes — (M1) AbortController created before hold music to close race window; (M2) dtmfOff assertion added to resource-release test; (M3) 4-1 artifact added to File List; (M4) hold music explicitly stopped on abort break path; (L1) outbound prime query wired to AbortController; (L2) axios.isCancel() used as canonical abort check in both bridges; (L3) removed dead-code redundant callActive guard inside while loop. 245 tests, 0 failures, 0 lint errors.
 
 ## Dev Agent Record
 
@@ -241,4 +242,5 @@ Claude Opus 4.6
 - voice-app/test/abort-on-hangup.test.js (new)
 - eslint.config.js (modified)
 - _bmad-output/implementation-artifacts/sprint-status.yaml (modified)
+- _bmad-output/implementation-artifacts/4-1-independent-session-lifecycle.md (modified — sprint status bookkeeping via chore commit)
 - _bmad-output/implementation-artifacts/4-2-in-flight-query-abort-on-hangup.md (modified)

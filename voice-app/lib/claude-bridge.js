@@ -53,7 +53,7 @@ async function query(prompt, options = {}) {
 
   } catch (error) {
     // Abort (caller hangup) — re-throw so conversation loop exits cleanly
-    if (error.code === 'ERR_CANCELED' || error.name === 'CanceledError') {
+    if (axios.isCancel(error)) {
       console.log(`[${timestamp}] CLAUDE query aborted (caller hangup)`, callId ? `(${callId})` : '');
       throw error;
     }
