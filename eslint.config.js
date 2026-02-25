@@ -62,6 +62,8 @@ module.exports = [
         clearInterval: 'readonly',
         setTimeout: 'readonly',
         clearTimeout: 'readonly',
+        setImmediate: 'readonly',
+        clearImmediate: 'readonly',
         fetch: 'readonly',  // Node 18+ global fetch
         AbortController: 'readonly',  // Node 15+ global
         AbortSignal: 'readonly'  // Node 15+ global

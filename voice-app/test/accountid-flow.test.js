@@ -124,7 +124,7 @@ describe('conversation-loop accountId flow', () => {
     const mockBridge = {
       query: (prompt, opts) => {
         capturedCalls.push({ prompt, opts });
-        return Promise.resolve('Response text');
+        return Promise.resolve({ response: 'Response text', isError: false });
       },
       endSession: () => Promise.resolve()
     };

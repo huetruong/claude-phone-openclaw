@@ -19,6 +19,22 @@ const READY_BEEP_URL = 'http://127.0.0.1:3000/static/ready-beep.wav';
 const GOTIT_BEEP_URL = 'http://127.0.0.1:3000/static/gotit-beep.wav';
 const HOLD_MUSIC_URL = 'http://127.0.0.1:3000/static/hold-music.mp3';
 
+/**
+ * Resolve the URL to play for the unavailability message.
+ * Prefers UNAVAILABLE_AUDIO_URL (static file) over TTS generation.
+ * @param {Object} ttsService - TTS service for speech generation
+ * @param {string|null} voiceId - Voice ID for TTS
+ * @returns {Promise<string>} URL to play
+ */
+async function getUnavailabilityUrl(ttsService, voiceId) {
+  if (process.env.UNAVAILABLE_AUDIO_URL) {
+    return process.env.UNAVAILABLE_AUDIO_URL;
+  }
+  const msg = process.env.UNAVAILABLE_MESSAGE ||
+    'The agent is currently unavailable. Please try again later.';
+  return ttsService.generateSpeech(msg, voiceId);
+}
+
 // Claude Code-style thinking phrases
 const THINKING_PHRASES = [
   "Pondering...",
@@ -376,13 +392,18 @@ async function runConversationLoop(endpoint, dialog, callUuid, options) {
         abortController.abort();
       }
 
-      // 2. Start hold music in background
+      // 2. Start hold music — looping so audio continues for full query duration.
+      // setImmediate between loops yields to the event loop so timers/I/O can run.
       let musicPlaying = false;
+      function loopHoldMusic() {
+        if (!musicPlaying || !callActive) return;
+        endpoint.play(HOLD_MUSIC_URL)
+          .then(() => setImmediate(loopHoldMusic))
+          .catch((e) => { logger.warn('Hold music error', { callUuid, error: e.message }); });
+      }
       if (callActive) {
-        endpoint.play(HOLD_MUSIC_URL).catch(e => {
-          logger.warn('Hold music failed', { callUuid, error: e.message });
-        });
         musicPlaying = true;
+        loopHoldMusic();
       }
 
       // 3. Query Claude
@@ -396,8 +417,9 @@ async function runConversationLoop(endpoint, dialog, callUuid, options) {
       } catch (queryError) {
         if (queryError.code === 'ERR_CANCELED' || queryError.name === 'CanceledError') {
           logger.info('Query aborted (caller hangup)', { callUuid });
-          // Explicitly stop hold music on abort path (break skips the normal stop below)
+          // Stop hold music on abort path (set false BEFORE uuid_break to prevent loop restart)
           if (musicPlaying) {
+            musicPlaying = false;
             endpoint.api('uuid_break', endpoint.uuid).catch(() => {});
           }
           break;
@@ -407,13 +429,10 @@ async function runConversationLoop(endpoint, dialog, callUuid, options) {
         abortController = null;
       }
 
-      // 4. Stop hold music
+      // 4. Stop hold music (set false BEFORE uuid_break to prevent loop restart)
       if (musicPlaying && callActive) {
-        try {
-          await endpoint.api('uuid_break', endpoint.uuid);
-        } catch (e) {
-          // Ignore - music may have already stopped
-        }
+        musicPlaying = false;
+        await endpoint.api('uuid_break', endpoint.uuid).catch(() => {});
       }
 
       // Check if call ended during Claude processing
@@ -424,8 +443,16 @@ async function runConversationLoop(endpoint, dialog, callUuid, options) {
 
       logger.info('Claude responded', { callUuid });
 
-      // 5. Extract and play voice line
-      const voiceLine = extractVoiceLine(claudeResponse);
+      // 5. Handle bridge error response (connection error, 503, etc.)
+      if (claudeResponse.isError) {
+        logger.error('Bridge error response', { callUuid, error: claudeResponse.response });
+        const unavailUrl = await getUnavailabilityUrl(ttsService, voiceId);
+        if (callActive) await endpoint.play(unavailUrl).catch(() => {});
+        break;
+      }
+
+      // 6. Extract and play voice line
+      const voiceLine = extractVoiceLine(claudeResponse.response);
       logger.info('Voice line', { callUuid, voiceLine });
 
       const responseUrl = await ttsService.generateSpeech(voiceLine, voiceId);
@@ -507,6 +534,7 @@ module.exports = {
   extractVoiceLine,
   isGoodbye,
   getRandomThinkingPhrase,
+  getUnavailabilityUrl,
   READY_BEEP_URL,
   GOTIT_BEEP_URL,
   HOLD_MUSIC_URL
