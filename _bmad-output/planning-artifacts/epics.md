@@ -102,6 +102,12 @@ NFR-I2: Bridge interface (`query`, `endSession`, `isAvailable`) is drop-in compa
 NFR-I3: All plugin and bridge operations are non-blocking (async/await only) — no synchronous I/O in the OpenClaw gateway event loop
 NFR-I4: Plugin installs without native build dependencies on a standard Linux VPS — no node-gyp, no compiler required
 
+**Configuration**
+
+NFR-C1: `allowFrom` phone numbers stored in `devices.json` MUST be in E.164 format — ensures exact-match validation against the SIP caller ID delivered by the PBX
+NFR-C2: The CLI (`claude-phone device add`) MUST accept `allowFrom` entries in any international format and normalize to E.164 using `libphonenumber-js` at config-write time; invalid numbers are rejected before saving
+NFR-C3: A `region.defaultCountry` (ISO 3166-1 alpha-2) MUST be configured during `claude-phone setup` and used as the fallback country for national-format phone number parsing; defaults to `US`
+
 ### Additional Requirements
 
 - **Brownfield foundation**: No starter template — existing drachtio + FreeSWITCH + FreePBX codebase is the base; voice-app changes are minimal (one new file: `openclaw-bridge.js`)
@@ -429,11 +435,11 @@ So that only trusted phone numbers can reach my agents.
 
 **Acceptance Criteria:**
 
-**Given** `devices.json` contains a device with `"extension": "9000"` and `"allowFrom": ["+15551234567", "+15559876543"]`
-**When** an inbound call arrives on extension 9000 from caller ID `+15551234567`
+**Given** `devices.json` contains a device with `"extension": "9000"` and `"allowFrom": ["+12024561234", "+12024569876"]`
+**When** an inbound call arrives on extension 9000 from caller ID `+12024561234`
 **Then** the caller ID matches the `allowFrom` list and the call proceeds to the bridge for agent routing
 
-**Given** an inbound call arrives on extension 9000 from caller ID `+15550000000` which is NOT in the `allowFrom` list
+**Given** an inbound call arrives on extension 9000 from caller ID `+12025550000` which is NOT in the `allowFrom` list
 **When** the voice-app checks the caller ID
 **Then** the call is rejected before the bridge `query()` method is ever called — the agent is never invoked
 
@@ -444,6 +450,14 @@ So that only trusted phone numbers can reach my agents.
 **Given** the caller's phone number is checked during validation
 **When** the result is logged
 **Then** the phone number appears only at DEBUG level, never at INFO/WARN/ERROR (NFR-S3)
+
+**Given** an operator runs `claude-phone device add` and enters `allowFrom` numbers in any international format (e.g. `(202) 456-1234` or `+44 20 7946 0958`)
+**When** the CLI saves the device configuration
+**Then** the numbers are normalized to E.164 format in `devices.json` using the operator's configured `region.defaultCountry` (NFR-C1, NFR-C2)
+
+**Given** an operator runs `claude-phone setup`
+**When** completing the Regional Settings step
+**Then** a `region.defaultCountry` (ISO 3166-1 alpha-2) is saved to config and used as the fallback country for phone number parsing (NFR-C3)
 
 ### Story 3.2: Unknown Caller Rejection & DM Policy
 

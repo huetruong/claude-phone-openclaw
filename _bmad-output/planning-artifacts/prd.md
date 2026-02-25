@@ -309,9 +309,10 @@ No build step. No native bindings. No post-install scripts.
   "voiceId": "...",
   "authId": "9000",
   "password": "...",
-  "allowFrom": ["+15551234567"]
+  "allowFrom": ["+12024561234"]
 }
 ```
+Note: `allowFrom` entries are stored in E.164 format. The CLI normalizes any international format at config-write time using the operator's configured `region.defaultCountry`.
 
 **Plugin config (OpenClaw side):**
 ```yaml
@@ -365,7 +366,7 @@ Existing `devices.json` structure is preserved. The bridge swap is backward-comp
 
 ### Caller Authentication & Access Control
 
-- **FR5:** The system can validate an inbound caller's phone number against a per-extension `allowFrom` allowlist before invoking an agent
+- **FR5:** The system can validate an inbound caller's phone number against a per-extension `allowFrom` allowlist (stored in E.164 format) before invoking an agent
 - **FR6:** The system can reject calls from unknown callers with a configurable audio message, without invoking an agent
 - **FR7:** An operator can configure `dmPolicy` per extension (`allowlist`, `pairing`, `open`) to control caller access rules
 - **FR8:** The webhook endpoint can authenticate requests using an API key, rejecting unauthenticated requests with a 401 response
@@ -403,7 +404,7 @@ Existing `devices.json` structure is preserved. The bridge swap is backward-comp
 ### Configuration & Operations
 
 - **FR27:** An operator can configure the bridge integration via environment variables (`BRIDGE_TYPE`, `OPENCLAW_WEBHOOK_URL`, `OPENCLAW_API_KEY`) without modifying source code
-- **FR28:** An operator can configure per-extension accounts (extension, voiceId, authId, `allowFrom`, `accountId`) in a structured JSON config file
+- **FR28:** An operator can configure per-extension accounts (extension, voiceId, authId, `allowFrom`, `accountId`) in a structured JSON config file; the CLI normalizes `allowFrom` entries to E.164 format at write time, accepting any international phone number format
 - **FR29:** An operator can configure agent bindings (extension → agent) in the OpenClaw plugin config
 - **FR30:** An operator can configure identity links (user identity → phone number) for callback resolution
 - **FR31:** The system can log events at appropriate severity levels, excluding caller phone numbers from INFO/WARN logs in production
@@ -440,3 +441,9 @@ Existing `devices.json` structure is preserved. The bridge swap is backward-comp
 - **NFR-I2:** Bridge interface (`query`, `endSession`, `isAvailable`) is drop-in compatible with `claude-bridge.js` — voice-app requires no structural changes beyond `BRIDGE_TYPE` env var
 - **NFR-I3:** All plugin and bridge operations are non-blocking (async/await only) — no synchronous I/O in the OpenClaw gateway event loop
 - **NFR-I4:** Plugin installs without native build dependencies on a standard Linux VPS — no node-gyp, no compiler required
+
+### Configuration
+
+- **NFR-C1:** `allowFrom` phone numbers stored in `devices.json` MUST be in E.164 format (`+` followed by country code and subscriber number, e.g. `+12024561234`) — this ensures exact-match validation against the SIP caller ID delivered by the PBX
+- **NFR-C2:** The CLI (`claude-phone device add`) MUST accept `allowFrom` entries in any international format (E.164, national with dashes/spaces/parentheses, e.g. `(202) 456-1234`) and normalize to E.164 using `libphonenumber-js` at config-write time; invalid or unparseable numbers are rejected with an error before saving
+- **NFR-C3:** A `region.defaultCountry` (ISO 3166-1 alpha-2, e.g. `US`, `GB`, `AU`) MUST be configured during `claude-phone setup` and used as the fallback country when parsing national-format phone numbers that omit the country code; defaults to `US` if not configured

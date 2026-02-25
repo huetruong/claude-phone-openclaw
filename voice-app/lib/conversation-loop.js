@@ -108,6 +108,24 @@ function extractVoiceLine(response) {
 }
 
 /**
+ * Check if caller is allowed by device's allowFrom list.
+ * Returns true if:
+ * - deviceConfig is null/undefined (no device = no restriction)
+ * - allowFrom is not set or empty (no restriction configured)
+ * - peerId is in the allowFrom array
+ *
+ * @param {Object|null} deviceConfig - Device configuration
+ * @param {string|null} peerId - Caller phone number (E.164 format)
+ * @returns {boolean}
+ */
+function checkAllowFrom(deviceConfig, peerId) {
+  if (!deviceConfig) return true;
+  const allowFrom = deviceConfig.allowFrom;
+  if (!Array.isArray(allowFrom) || allowFrom.length === 0) return true;
+  return allowFrom.includes(peerId);
+}
+
+/**
  * Run the conversation loop
  *
  * @param {Object} endpoint - FreeSWITCH endpoint
@@ -151,6 +169,14 @@ async function runConversationLoop(endpoint, dialog, callUuid, options) {
     callActive = false;
     logger.info('Call ended (dialog destroyed)', { callUuid });
   };
+
+  // ── Caller allowlist check (Story 3.1, FR5) ──
+  if (!checkAllowFrom(deviceConfig, peerId)) {
+    logger.info('Call rejected: caller not in allowFrom list', { callUuid, extension: deviceConfig?.extension });
+    logger.debug('Rejected caller details', { callUuid, peerId });
+    try { dialog.destroy(); } catch (e) { /* already destroyed */ }
+    return;
+  }
 
   try {
     logger.info('Conversation loop starting', {
@@ -242,7 +268,7 @@ async function runConversationLoop(endpoint, dialog, callUuid, options) {
     if (audioForkServer.emit) {
       audioForkServer.emit('session', session);
     }
-    console.log('[AUDIO] New session for call ' + callUuid);
+    logger.debug('Audio fork session active', { callUuid });
 
     // Main conversation loop
     let turnCount = 0;
@@ -452,6 +478,7 @@ async function runConversationLoop(endpoint, dialog, callUuid, options) {
 
 module.exports = {
   runConversationLoop,
+  checkAllowFrom,
   extractVoiceLine,
   isGoodbye,
   getRandomThinkingPhrase,

@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { parsePhoneNumber, ParseError } from 'libphonenumber-js';
 
 /**
  * Validate ElevenLabs API key by making a test request
@@ -121,6 +122,46 @@ export async function validateOpenAIKey(apiKey) {
  */
 export function validateExtension(extension) {
   return /^\d{4,5}$/.test(extension);
+}
+
+/**
+ * Parse and validate a comma-separated list of phone numbers.
+ * Accepts any international format and normalizes to E.164.
+ * Returns an empty array if input is blank (no restriction).
+ *
+ * @param {string} input - Comma-separated phone numbers in any format
+ * @param {string} [defaultCountry='US'] - ISO 3166-1 alpha-2 country code for national-format numbers
+ * @returns {{ numbers: string[], error: string|null }}
+ */
+export function parseAllowFrom(input, defaultCountry = 'US') {
+  if (!input || input.trim() === '') {
+    return { numbers: [], error: null };
+  }
+  const entries = input.split(',').map(n => n.trim()).filter(n => n);
+  const normalized = [];
+  const invalid = [];
+
+  for (const entry of entries) {
+    try {
+      const phone = parsePhoneNumber(entry, defaultCountry);
+      if (phone && phone.isValid()) {
+        normalized.push(phone.format('E.164'));
+      } else {
+        invalid.push(entry);
+      }
+    } catch (err) {
+      if (err instanceof ParseError) {
+        invalid.push(entry);
+      } else {
+        throw err;
+      }
+    }
+  }
+
+  if (invalid.length > 0) {
+    return { numbers: [], error: `Could not parse phone numbers: ${invalid.join(', ')} — use E.164 (+15551234567) or national format with correct country configured` };
+  }
+  return { numbers: normalized, error: null };
 }
 
 /**

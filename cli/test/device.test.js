@@ -1,5 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert';
+import { parseAllowFrom } from '../lib/validators.js';
 
 describe('Device management', () => {
   describe('Device add', () => {
@@ -106,6 +107,41 @@ describe('Device management', () => {
       const answers = { name: 'Trinity', accountId: '   ' };
       const accountId = answers.accountId.trim() || answers.name.trim().toLowerCase();
       assert.strictEqual(accountId, 'trinity');
+    });
+
+    it('should store allowFrom array when E.164 numbers provided', () => {
+      const { numbers } = parseAllowFrom('+12024561234, +12024569876', 'US');
+      const newDevice = { name: 'Trinity', ...(numbers.length > 0 && { allowFrom: numbers }) };
+      assert.deepStrictEqual(newDevice.allowFrom, ['+12024561234', '+12024569876']);
+    });
+
+    it('should omit allowFrom when left blank (no restriction)', () => {
+      const { numbers } = parseAllowFrom('', 'US');
+      const newDevice = { name: 'Trinity', ...(numbers.length > 0 && { allowFrom: numbers }) };
+      assert.strictEqual(newDevice.allowFrom, undefined, 'allowFrom must be absent when blank — means allow all');
+    });
+
+    it('should normalize national format to E.164 using defaultCountry', () => {
+      const { numbers, error } = parseAllowFrom('(202) 456-1234', 'US');
+      assert.strictEqual(error, null);
+      assert.deepStrictEqual(numbers, ['+12024561234']);
+    });
+
+    it('should normalize international format with country code', () => {
+      const { numbers, error } = parseAllowFrom('+44 20 7946 0958', 'GB');
+      assert.strictEqual(error, null);
+      assert.ok(numbers[0].startsWith('+44'), 'UK number should start with +44');
+    });
+
+    it('should reject unparseable numbers', () => {
+      const { error } = parseAllowFrom('not-a-number', 'US');
+      assert.ok(error, 'Should return an error for unparseable input');
+    });
+
+    it('should accept valid E.164 single number', () => {
+      const { numbers, error } = parseAllowFrom('+12024561234', 'US');
+      assert.strictEqual(error, null);
+      assert.deepStrictEqual(numbers, ['+12024561234']);
     });
   });
 

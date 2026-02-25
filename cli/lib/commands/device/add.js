@@ -2,7 +2,7 @@ import inquirer from 'inquirer';
 import chalk from 'chalk';
 import ora from 'ora';
 import { loadConfig, saveConfig, configExists } from '../../config.js';
-import { validateExtension, validateVoiceId } from '../../validators.js';
+import { validateExtension, validateVoiceId, parseAllowFrom } from '../../validators.js';
 import { writeDockerConfig } from '../../docker.js';
 
 /**
@@ -94,6 +94,15 @@ export async function deviceAddCommand() {
       name: 'prompt',
       message: 'System prompt:',
       default: (answers) => `You are ${answers.name}, a helpful AI assistant accessible via phone.`
+    },
+    {
+      type: 'input',
+      name: 'allowFrom',
+      message: 'Allowed caller numbers (comma-separated, leave blank for no restriction):',
+      validate: (input) => {
+        const { error } = parseAllowFrom(input, config.region?.defaultCountry);
+        return error || true;
+      }
     }
   ]);
 
@@ -110,6 +119,7 @@ export async function deviceAddCommand() {
   spinner.succeed(chalk.green(`Voice validated: ${voiceResult.name}`));
 
   // Add device to config
+  const { numbers: allowFromNumbers } = parseAllowFrom(answers.allowFrom, config.region?.defaultCountry);
   const newDevice = {
     name: answers.name.trim(),
     accountId: answers.accountId.trim() || answers.name.trim().toLowerCase(),
@@ -117,7 +127,8 @@ export async function deviceAddCommand() {
     authId: answers.authId || answers.extension,
     password: answers.password,
     voiceId: answers.voiceId,
-    prompt: answers.prompt || `You are ${answers.name}, a helpful AI assistant accessible via phone.`
+    prompt: answers.prompt || `You are ${answers.name}, a helpful AI assistant accessible via phone.`,
+    ...(allowFromNumbers.length > 0 && { allowFrom: allowFromNumbers })
   };
 
   config.devices.push(newDevice);
@@ -137,6 +148,11 @@ export async function deviceAddCommand() {
   console.log(chalk.gray(`  Account ID: ${newDevice.accountId}`));
   console.log(chalk.gray(`  Extension: ${newDevice.extension}`));
   console.log(chalk.gray(`  Voice: ${voiceResult.name} (${newDevice.voiceId})`));
+  if (newDevice.allowFrom && newDevice.allowFrom.length > 0) {
+    console.log(chalk.gray(`  Allowed callers: ${newDevice.allowFrom.join(', ')}`));
+  } else {
+    console.log(chalk.gray('  Allowed callers: all (no restriction)'));
+  }
   console.log(chalk.yellow('\n⚠ Restart services to apply changes:'));
   console.log(chalk.gray('  claude-phone stop'));
   console.log(chalk.gray('  claude-phone start\n'));
