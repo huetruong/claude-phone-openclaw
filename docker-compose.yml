@@ -56,6 +56,9 @@ services:
       - ./voice-app/audio:/app/audio
       # Device configurations
       - ./voice-app/config:/app/config
+      # Static audio files (hold-music.mp3, custom unavailability audio, etc.)
+      # Place hold-music.mp3 here — it is not committed to git (source your own file)
+      - ./voice-app/static:/app/static
     depends_on:
       - drachtio
       - freeswitch

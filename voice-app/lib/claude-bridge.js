@@ -14,7 +14,7 @@ const CLAUDE_API_URL = process.env.CLAUDE_API_URL || 'http://localhost:3333';
  * @param {string} options.callId - Call UUID for maintaining conversation context
  * @param {string} options.devicePrompt - Device-specific personality prompt
  * @param {number} options.timeout - Timeout in seconds (default: 30, AC27)
- * @returns {Promise<string>} Claude's response
+ * @returns {Promise<{response: string, isError: boolean}>} Response object
  */
 async function query(prompt, options = {}) {
   const { callId, devicePrompt, timeout = 30, signal } = options; // AC27: Default 30s timeout
@@ -68,6 +68,12 @@ async function query(prompt, options = {}) {
     if (error.code === 'ETIMEDOUT' || error.code === 'ECONNABORTED') {
       console.error(`[${timestamp}] CLAUDE Timeout after ${timeout} seconds`);
       return { response: "I'm sorry, that request took too long. This might mean the API server is slow or there's a network issue. Try asking something simpler, or check that claude-phone api-server is running.", isError: true };
+    }
+
+    // API server reports agent unavailable
+    if (error.response && error.response.status === 503) {
+      console.warn(`[${timestamp}] CLAUDE API server unavailable (503)`);
+      return { response: "The agent is currently unavailable. Please try again later.", isError: true };
     }
 
     console.error(`[${timestamp}] CLAUDE Error:`, error.message);

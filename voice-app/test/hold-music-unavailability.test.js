@@ -123,6 +123,56 @@ describe('hold-music: starts on query dispatch and stops on response', () => {
     assert.strictEqual(holdMusicStarted, true, 'hold music must start before query resolves');
   });
 
+  it('hold music loops — play is called again after each file completion', async () => {
+    let musicPlayCount = 0;
+    const pendingPlayResolvers = [];
+    let allowQueryResolve;
+    let notifySecondPlay;
+    const waitForSecondPlay = new Promise(r => { notifySecondPlay = r; });
+
+    const mocks = buildMocks({
+      query: () => new Promise(resolve => { allowQueryResolve = resolve; })
+    });
+
+    // Hold music plays pend until manually resolved; second play resolves waitForSecondPlay
+    mocks.mockEndpoint.play = (url) => {
+      mocks.calls.playUrls.push(url);
+      if (url === HOLD_MUSIC_URL) {
+        musicPlayCount++;
+        if (musicPlayCount === 2) notifySecondPlay();
+        return new Promise(r => pendingPlayResolvers.push(r));
+      }
+      return Promise.resolve();
+    };
+
+    const loopDone = runConversationLoop(
+      mocks.mockEndpoint, mocks.mockDialog, 'hm-loop-uuid',
+      {
+        audioForkServer: mocks.mockAudioForkServer,
+        whisperClient: mocks.mockWhisperClient,
+        claudeBridge: mocks.mockBridge,
+        ttsService: mocks.mockTtsService,
+        wsPort: 8080, deviceConfig: null, peerId: null, maxTurns: 1
+      }
+    );
+
+    // All pre-hold-music awaits resolve as microtasks (all mocks return Promise.resolve).
+    // By the next setImmediate macrotask the loop has reached hold music and is awaiting query.
+    await new Promise(r => setImmediate(r));
+    assert.strictEqual(musicPlayCount, 1, 'first hold music play must have started');
+
+    // Resolve first play — loopHoldMusic's .then() schedules setImmediate(loopHoldMusic)
+    pendingPlayResolvers.shift()();
+    // Wait until loopHoldMusic fires and starts the second play (notification-based, no race)
+    await waitForSecondPlay;
+    assert.ok(musicPlayCount >= 2, `hold music must loop after first play ends (got ${musicPlayCount})`);
+
+    // Finish: resolve query and any remaining pending plays then wait for clean exit
+    allowQueryResolve({ response: 'done', isError: false });
+    pendingPlayResolvers.forEach(r => r());
+    await loopDone;
+  });
+
   it('uuid_break is called after query response to stop hold music', async () => {
     const mocks = buildMocks();
 
@@ -372,7 +422,7 @@ describe('pre-call availability: sip-handler rejects call when bridge is down', 
   const { handleInvite } = require('../lib/sip-handler');
 
   function buildSipMocks(isAvailableResult) {
-    const calls = { playUrls: [], dialogDestroyed: false };
+    const calls = { playUrls: [], connectCallerCalled: false, resSendCodes: [] };
 
     const mockEndpoint = {
       play: (url) => { calls.playUrls.push(url); return Promise.resolve(); },
@@ -388,11 +438,14 @@ describe('pre-call availability: sip-handler rejects call when bridge is down', 
     const mockDialog = {
       on: () => {},
       off: () => {},
-      destroy: () => { calls.dialogDestroyed = true; }
+      destroy: () => {}
     };
 
     const mockMediaServer = {
-      connectCaller: () => Promise.resolve({ endpoint: mockEndpoint, dialog: mockDialog })
+      connectCaller: () => {
+        calls.connectCallerCalled = true;
+        return Promise.resolve({ endpoint: mockEndpoint, dialog: mockDialog });
+      }
     };
 
     const mockBridge = {
@@ -422,7 +475,7 @@ describe('pre-call availability: sip-handler rejects call when bridge is down', 
       body: ''
     };
 
-    const mockRes = { send: () => {} };
+    const mockRes = { send: (code) => { calls.resSendCodes.push(code); } };
 
     return {
       calls,
@@ -440,30 +493,27 @@ describe('pre-call availability: sip-handler rejects call when bridge is down', 
     };
   }
 
-  it('plays unavailability message and ends call when bridge is unavailable', async () => {
+  it('sends SIP 480 and never answers call when bridge is unavailable', async () => {
     const { calls, mockReq, mockRes, options } = buildSipMocks(false);
 
     await handleInvite(mockReq, mockRes, options);
 
-    assert.ok(calls.playUrls.length > 0, 'unavailability message must be played');
-    assert.strictEqual(calls.dialogDestroyed, true, 'dialog must be destroyed when bridge unavailable');
+    assert.ok(calls.resSendCodes.includes(480), 'SIP 480 must be sent when bridge is unavailable');
+    assert.strictEqual(calls.connectCallerCalled, false, 'call must not be answered when bridge is unavailable');
   });
 
-  it('does not play unavailability message when bridge is available', async () => {
-    // When bridge is available, conversation loop starts — audio fork never resolves
-    // so the function will hang. We use a timeout to verify initial behaviour.
+  it('answers call (connectCaller) when bridge is available', async () => {
     const { calls, mockReq, mockRes, options } = buildSipMocks(true);
 
-    // Run with a short timeout — we only care that the unavailability path is NOT taken
-    const raceResult = await Promise.race([
-      handleInvite(mockReq, mockRes, options).then(() => 'done'),
-      new Promise(resolve => setTimeout(() => resolve('timeout'), 200))
+    // When bridge is available, conversation loop starts but audio fork never resolves.
+    // Race to verify the initial path (connectCaller) was taken.
+    await Promise.race([
+      handleInvite(mockReq, mockRes, options),
+      new Promise(resolve => setTimeout(resolve, 200))
     ]);
 
-    // Either way, dialogDestroyed must be false (conversation loop started normally)
-    assert.strictEqual(calls.dialogDestroyed, false, 'dialog must not be destroyed when bridge is available');
-    // raceResult will be 'timeout' since audio fork never resolves — that's expected
-    assert.ok(['done', 'timeout'].includes(raceResult), 'handleInvite should run or timeout');
+    assert.strictEqual(calls.connectCallerCalled, true, 'call must be answered when bridge is available');
+    assert.ok(!calls.resSendCodes.includes(480), 'SIP 480 must not be sent when bridge is available');
   });
 });
 

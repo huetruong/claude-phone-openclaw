@@ -3,7 +3,7 @@
  * v13: Inbound path unified with runConversationLoop() (Story 4.1)
  */
 
-const { runConversationLoop, checkAllowFrom, getUnavailabilityUrl } = require('./conversation-loop');
+const { runConversationLoop, checkAllowFrom } = require('./conversation-loop');
 const logger = require('./logger');
 
 /**
@@ -95,6 +95,15 @@ async function handleInvite(req, res, options) {
     return;
   }
 
+  // ── Pre-call availability check — reject BEFORE answering (SIP 480) ──
+  // Check before connectCaller so we don't waste a FreeSWITCH endpoint when the bridge is down.
+  const bridgeAvailable = await options.claudeBridge.isAvailable({ timeout: 2000 });
+  if (!bridgeAvailable) {
+    logger.warn('[sip-voice] bridge unavailable, rejecting call (SIP 480)');
+    res.send(480);
+    return;
+  }
+
   try {
     // Strip video from SDP to avoid FreeSWITCH 488 error with unsupported video codecs
     const originalSdp = req.body;
@@ -114,17 +123,6 @@ async function handleInvite(req, res, options) {
       console.log('[' + new Date().toISOString() + '] CALL Ended');
       if (endpoint) endpoint.destroy().catch(function() {});
     });
-
-    // Pre-call availability check (NFR-R3: 2s timeout to stay within 3s bound)
-    const bridgeAvailable = await options.claudeBridge.isAvailable({ timeout: 2000 });
-    if (!bridgeAvailable) {
-      logger.warn('[sip-voice] bridge unavailable, ending call before conversation start');
-      const voiceId = deviceConfig?.voiceId || null;
-      const unavailUrl = await getUnavailabilityUrl(options.ttsService, voiceId);
-      await endpoint.play(unavailUrl).catch(() => {});
-      try { dialog.destroy(); } catch (e) {}
-      return { endpoint, dialog, callerId, callUuid };
-    }
 
     // Run unified conversation loop (handles callActive tracking, cleanup, endSession)
     await runConversationLoop(endpoint, dialog, callUuid, {

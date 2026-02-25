@@ -444,7 +444,7 @@ async function runConversationLoop(endpoint, dialog, callUuid, options) {
       logger.info('Claude responded', { callUuid });
 
       // 5. Handle bridge error response (connection error, 503, etc.)
-      if (claudeResponse.isError) {
+      if (!claudeResponse || claudeResponse.isError) {
         logger.error('Bridge error response', { callUuid, error: claudeResponse.response });
         const unavailUrl = await getUnavailabilityUrl(ttsService, voiceId);
         if (callActive) await endpoint.play(unavailUrl).catch(() => {});
