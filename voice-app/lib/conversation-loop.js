@@ -163,10 +163,14 @@ async function runConversationLoop(endpoint, dialog, callUuid, options) {
   let forkRunning = false;
   let callActive = true;
   let dtmfHandler = null;
+  let abortController = null;
 
   // Track when call ends to prevent operations on dead endpoints
   const onDialogDestroy = () => {
     callActive = false;
+    if (abortController) {
+      abortController.abort();
+    }
     logger.info('Call ended (dialog destroyed)', { callUuid });
   };
 
@@ -193,10 +197,17 @@ async function runConversationLoop(endpoint, dialog, callUuid, options) {
     // Fire-and-forget: we don't use the response, just establishing session context
     if (initialContext && callActive) {
       logger.info('Priming Claude with outbound context (non-blocking)', { callUuid });
+      const primeController = new AbortController();
+      const onPrimeDestroy = () => primeController.abort();
+      dialog.on('destroy', onPrimeDestroy);
       claudeBridge.query(
         `[SYSTEM CONTEXT - DO NOT REPEAT]: You just called the user to tell them: "${initialContext}". They have answered. Now listen to their response and help them.`,
-        { callId: callUuid, devicePrompt: devicePrompt, accountId: deviceConfig?.accountId, peerId, isSystemPrime: true }
-      ).catch(err => logger.warn('Prime query failed', { callUuid, error: err.message }));
+        { callId: callUuid, devicePrompt: devicePrompt, accountId: deviceConfig?.accountId, peerId, isSystemPrime: true, signal: primeController.signal }
+      ).catch(err => {
+        if (err.code !== 'ERR_CANCELED' && err.name !== 'CanceledError') {
+          logger.warn('Prime query failed', { callUuid, error: err.message });
+        }
+      }).finally(() => dialog.off('destroy', onPrimeDestroy));
     }
 
     // Check if call is still active before starting audio fork
@@ -268,12 +279,6 @@ async function runConversationLoop(endpoint, dialog, callUuid, options) {
     while (turnCount < maxTurns && callActive) {
       turnCount++;
       logger.info('Conversation turn', { callUuid, turn: turnCount, maxTurns });
-
-      // Check if call is still active
-      if (!callActive) {
-        logger.info('Call ended during turn', { callUuid, turn: turnCount });
-        break;
-      }
 
       // ============================================
       // READY BEEP: Signal "your turn to speak"
@@ -364,6 +369,13 @@ async function runConversationLoop(endpoint, dialog, callUuid, options) {
       const thinkingUrl = await ttsService.generateSpeech(thinkingPhrase, voiceId);
       if (callActive) await endpoint.play(thinkingUrl);
 
+      // Create AbortController BEFORE hold music to close the race window where
+      // onDialogDestroy fires between the callActive check and AbortController creation
+      abortController = new AbortController();
+      if (!callActive) {
+        abortController.abort();
+      }
+
       // 2. Start hold music in background
       let musicPlaying = false;
       if (callActive) {
@@ -375,10 +387,25 @@ async function runConversationLoop(endpoint, dialog, callUuid, options) {
 
       // 3. Query Claude
       logger.info('Querying Claude', { callUuid });
-      const claudeResponse = await claudeBridge.query(
-        transcript,
-        { callId: callUuid, devicePrompt: devicePrompt, accountId: deviceConfig?.accountId, peerId }
-      );
+      let claudeResponse;
+      try {
+        claudeResponse = await claudeBridge.query(
+          transcript,
+          { callId: callUuid, devicePrompt: devicePrompt, accountId: deviceConfig?.accountId, peerId, signal: abortController.signal }
+        );
+      } catch (queryError) {
+        if (queryError.code === 'ERR_CANCELED' || queryError.name === 'CanceledError') {
+          logger.info('Query aborted (caller hangup)', { callUuid });
+          // Explicitly stop hold music on abort path (break skips the normal stop below)
+          if (musicPlaying) {
+            endpoint.api('uuid_break', endpoint.uuid).catch(() => {});
+          }
+          break;
+        }
+        throw queryError;
+      } finally {
+        abortController = null;
+      }
 
       // 4. Stop hold music
       if (musicPlaying && callActive) {
@@ -436,6 +463,12 @@ async function runConversationLoop(endpoint, dialog, callUuid, options) {
     }
   } finally {
     logger.info('Conversation loop cleanup', { callUuid });
+
+    // Defensively abort any in-flight query
+    if (abortController) {
+      abortController.abort();
+      abortController = null;
+    }
 
     // Remove dialog listener
     dialog.off('destroy', onDialogDestroy);

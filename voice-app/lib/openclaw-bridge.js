@@ -29,7 +29,7 @@ if (!OPENCLAW_API_KEY) {
  * @returns {Promise<string>} Agent response string
  */
 async function query(prompt, options = {}) {
-  const { callId, accountId, peerId, timeout = 30 } = options;
+  const { callId, accountId, peerId, timeout = 30, signal } = options;
   const timestamp = new Date().toISOString();
 
   try {
@@ -47,16 +47,19 @@ async function query(prompt, options = {}) {
     if (accountId) body.accountId = accountId;
     if (peerId) body.peerId = peerId;
 
+    const axiosConfig = {
+      timeout: timeout * 1000,
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + OPENCLAW_API_KEY
+      }
+    };
+    if (signal) axiosConfig.signal = signal;
+
     const response = await axios.post(
       OPENCLAW_WEBHOOK_URL + '/voice/query',
       body,
-      {
-        timeout: timeout * 1000,
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer ' + OPENCLAW_API_KEY
-        }
-      }
+      axiosConfig
     );
 
     console.log('[' + new Date().toISOString() + '] OPENCLAW Response received');
@@ -64,6 +67,12 @@ async function query(prompt, options = {}) {
     return responseText || "I received an empty response. Please try again.";
 
   } catch (error) {
+    // Abort (caller hangup) — re-throw so conversation loop exits cleanly
+    if (axios.isCancel(error)) {
+      console.log('[' + timestamp + '] OPENCLAW query aborted (caller hangup)', callId ? '(' + callId + ')' : '');
+      throw error;
+    }
+
     // Plugin unreachable — return friendly message (matches claude-bridge.js pattern)
     if (error.code === 'ECONNREFUSED' || error.code === 'EHOSTUNREACH' || error.code === 'ENETUNREACH') {
       console.warn('[' + timestamp + '] OPENCLAW Plugin unreachable (' + error.code + ')');
