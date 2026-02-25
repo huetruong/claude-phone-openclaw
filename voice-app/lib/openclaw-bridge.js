@@ -64,7 +64,7 @@ async function query(prompt, options = {}) {
 
     console.log('[' + new Date().toISOString() + '] OPENCLAW Response received');
     const responseText = response.data && response.data.response;
-    return responseText || "I received an empty response. Please try again.";
+    return { response: responseText || "I received an empty response. Please try again.", isError: false };
 
   } catch (error) {
     // Abort (caller hangup) — re-throw so conversation loop exits cleanly
@@ -73,26 +73,26 @@ async function query(prompt, options = {}) {
       throw error;
     }
 
-    // Plugin unreachable — return friendly message (matches claude-bridge.js pattern)
+    // Plugin unreachable — return error response
     if (error.code === 'ECONNREFUSED' || error.code === 'EHOSTUNREACH' || error.code === 'ENETUNREACH') {
       console.warn('[' + timestamp + '] OPENCLAW Plugin unreachable (' + error.code + ')');
-      return "I'm having trouble connecting to my brain right now. Please try again later.";
+      return { response: "I'm having trouble connecting to my brain right now. Please try again later.", isError: true };
     }
 
-    // Timeout — return friendly message
+    // Timeout — return error response
     if (error.code === 'ETIMEDOUT' || error.code === 'ECONNABORTED') {
       console.error('[' + timestamp + '] OPENCLAW Timeout after ' + timeout + ' seconds');
-      return "I'm sorry, that request took too long. Please try again.";
+      return { response: "I'm sorry, that request took too long. Please try again.", isError: true };
     }
 
     // Plugin reports agent unavailable
     if (error.response && error.response.status === 503) {
       console.warn('[' + timestamp + '] OPENCLAW Plugin unavailable (503)');
-      return "The agent is currently unavailable. Please try again later.";
+      return { response: "The agent is currently unavailable. Please try again later.", isError: true };
     }
 
     console.error('[' + timestamp + '] OPENCLAW Error:', error.message);
-    return "I encountered an unexpected error. Please try again.";
+    return { response: "I encountered an unexpected error. Please try again.", isError: true };
   }
 }
 
@@ -126,12 +126,15 @@ async function endSession(callId) {
 
 /**
  * Check if the OpenClaw plugin is reachable.
+ * @param {Object} [options={}]
+ * @param {number} [options.timeout=5000] - Timeout in milliseconds
  * @returns {Promise<boolean>} true if plugin responds with HTTP 200
  */
-async function isAvailable() {
+async function isAvailable(options = {}) {
+  const { timeout = 5000 } = options;
   try {
     await axios.get(OPENCLAW_WEBHOOK_URL + '/voice/health', {
-      timeout: 5000,
+      timeout,
       headers: { 'Authorization': 'Bearer ' + OPENCLAW_API_KEY }
     });
     return true;

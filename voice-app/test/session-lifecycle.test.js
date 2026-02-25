@@ -22,7 +22,7 @@ describe('runConversationLoop - endSession called in finally block', () => {
     let endSessionCallId = null;
 
     const mockBridge = {
-      query: () => Promise.resolve('response'),
+      query: () => Promise.resolve({ response: 'response', isError: false }),
       endSession: (callId) => {
         endSessionCalled = true;
         endSessionCallId = callId;
@@ -76,7 +76,7 @@ describe('runConversationLoop - endSession called in finally block', () => {
     const endSessionCalls = [];
 
     const mockBridge = {
-      query: () => Promise.resolve('response'),
+      query: () => Promise.resolve({ response: 'response', isError: false }),
       endSession: (callId) => {
         endSessionCalls.push(callId);
         return Promise.resolve();
@@ -125,7 +125,7 @@ describe('runConversationLoop - endSession called in finally block', () => {
 
   it('does not throw if endSession fails (fire-and-forget)', async () => {
     const mockBridge = {
-      query: () => Promise.resolve('response'),
+      query: () => Promise.resolve({ response: 'response', isError: false }),
       endSession: () => Promise.reject(new Error('network error'))
     };
 

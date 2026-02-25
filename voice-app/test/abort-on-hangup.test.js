@@ -336,7 +336,8 @@ describe('abort-on-hangup: openclaw-bridge abort support', () => {
     queryHandler = (req, res) => res.json({ response: 'normal response' });
     const bridge = requireFreshBridge();
     const result = await bridge.query('test prompt', { callId: 'no-abort' });
-    assert.strictEqual(result, 'normal response');
+    assert.strictEqual(result.response, 'normal response');
+    assert.strictEqual(result.isError, false);
   });
 });
 
@@ -411,7 +412,8 @@ describe('abort-on-hangup: claude-bridge abort support', () => {
     askHandler = (req, res) => res.json({ success: true, response: 'normal response', duration_ms: 10 });
     const bridge = requireFreshBridge();
     const result = await bridge.query('test prompt', { callId: 'no-abort' });
-    assert.strictEqual(result, 'normal response');
+    assert.strictEqual(result.response, 'normal response');
+    assert.strictEqual(result.isError, false);
   });
 });
 

@@ -154,6 +154,53 @@ claude-phone stop
 claude-phone start
 ```
 
+## Hold Music & Unavailability
+
+### Silence during agent thinking (no hold music)
+
+**Symptom:** Caller hears dead air while the agent is processing their question.
+
+**Causes & Solutions:**
+
+| Cause | Solution |
+|-------|----------|
+| `hold-music.mp3` missing from static directory | Place the file at `voice-app/static/hold-music.mp3` and ensure the volume mount includes `./voice-app/static:/app/static` |
+| Static volume not mounted | Check `docker-compose.yml` for `./voice-app/static:/app/static` under `voice-app` volumes |
+| File permission issue | Ensure the file is readable inside the container: `docker exec voice-app ls /app/static/` |
+
+**Verify the file is accessible:**
+```bash
+curl http://localhost:3000/static/hold-music.mp3 -o /dev/null -w "%{http_code}"
+# Should return 200
+```
+
+### "The agent is currently unavailable" on every call
+
+**Symptom:** Every call immediately plays the unavailability message.
+
+**Causes:**
+1. **OpenClaw plugin unreachable** — check `OPENCLAW_WEBHOOK_URL` and plugin health:
+   ```bash
+   curl -H "Authorization: Bearer $OPENCLAW_API_KEY" $OPENCLAW_WEBHOOK_URL/voice/health
+   # Should return {"ok":true}
+   ```
+2. **Claude API server down** — if using `BRIDGE_TYPE=claude`:
+   ```bash
+   curl http://<api-server>:3333/health
+   ```
+3. **Wrong URL or API key** — verify `.env` settings match plugin configuration.
+
+### Customizing the unavailability message
+
+Add to your `.env`:
+```bash
+# Custom text (spoken via TTS)
+UNAVAILABLE_MESSAGE=Our assistant is offline. Please call back in a few minutes.
+
+# Or use a pre-recorded audio file (skips TTS entirely)
+UNAVAILABLE_AUDIO_URL=http://127.0.0.1:3000/static/unavailable.mp3
+```
+
 ## Runtime Issues
 
 ### "Sorry, something went wrong" on every call

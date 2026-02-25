@@ -86,7 +86,8 @@ describe('openclaw-bridge', () => {
       queryHandler = (req, res) => res.json({ response: 'Hello from agent' });
       const bridge = requireFreshBridge();
       const result = await bridge.query('test prompt', { callId: 'call-123' });
-      assert.strictEqual(result, 'Hello from agent');
+      assert.strictEqual(result.response, 'Hello from agent');
+      assert.strictEqual(result.isError, false);
     });
 
     it('sends correct JSON body with prompt and callId', async () => {
@@ -144,10 +145,11 @@ describe('openclaw-bridge', () => {
       process.env.OPENCLAW_WEBHOOK_URL = savedUrl;
 
       const result = await bridge.query('prompt', { callId: 'c1' });
-      assert.strictEqual(typeof result, 'string', 'should return string not throw');
+      assert.strictEqual(typeof result.response, 'string', 'should return object with response string');
+      assert.strictEqual(result.isError, true, 'connection error must set isError: true');
       assert.ok(
-        result.includes('trouble connecting') || result.includes('unexpected error'),
-        'Expected friendly ECONNREFUSED message, got: ' + result
+        result.response.includes('trouble connecting') || result.response.includes('unexpected error'),
+        'Expected friendly ECONNREFUSED message, got: ' + result.response
       );
     });
 
@@ -158,10 +160,11 @@ describe('openclaw-bridge', () => {
       };
       const bridge = requireFreshBridge();
       const result = await bridge.query('prompt', { callId: 'c1', timeout: 0.1 });
-      assert.strictEqual(typeof result, 'string', 'should return string not throw');
+      assert.strictEqual(typeof result.response, 'string', 'should return object with response string');
+      assert.strictEqual(result.isError, true, 'timeout must set isError: true');
       assert.ok(
-        result.includes('took too long') || result.includes('unexpected error'),
-        'Expected timeout message, got: ' + result
+        result.response.includes('took too long') || result.response.includes('unexpected error'),
+        'Expected timeout message, got: ' + result.response
       );
     });
 
@@ -169,10 +172,11 @@ describe('openclaw-bridge', () => {
       queryHandler = (req, res) => res.status(503).json({ error: 'service unavailable' });
       const bridge = requireFreshBridge();
       const result = await bridge.query('prompt', { callId: 'c1' });
-      assert.strictEqual(typeof result, 'string', 'should return string not throw');
+      assert.strictEqual(typeof result.response, 'string', 'should return object with response string');
+      assert.strictEqual(result.isError, true, 'HTTP 503 must set isError: true');
       assert.ok(
-        result.includes('unavailable'),
-        'Expected unavailability message, got: ' + result
+        result.response.includes('unavailable'),
+        'Expected unavailability message, got: ' + result.response
       );
     });
 
@@ -181,7 +185,8 @@ describe('openclaw-bridge', () => {
       const bridge = requireFreshBridge();
       // No callId, accountId, or peerId
       const result = await bridge.query('just a prompt', {});
-      assert.strictEqual(result, 'ok');
+      assert.strictEqual(result.response, 'ok');
+      assert.strictEqual(result.isError, false);
     });
   });
 
