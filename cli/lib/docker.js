@@ -150,6 +150,7 @@ services:
     volumes:
       - ${config.paths.voiceApp}/audio:/app/audio
       - ${config.paths.voiceApp}/config:/app/config
+      - ${getConfigDir()}/voice-app/static:/app/static
     depends_on:
       - drachtio
       - freeswitch
