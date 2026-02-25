@@ -26,7 +26,7 @@ if (!OPENCLAW_API_KEY) {
  * @param {string} [options.accountId] - Account/device ID (added by Story 2.1)
  * @param {string} [options.peerId] - Caller phone number (PII — logged at DEBUG only)
  * @param {number} [options.timeout=30] - Timeout in seconds
- * @returns {Promise<string>} Agent response string
+ * @returns {Promise<{response: string, isError: boolean}>} Response object
  */
 async function query(prompt, options = {}) {
   const { callId, accountId, peerId, timeout = 30, signal } = options;

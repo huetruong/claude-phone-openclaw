@@ -1,6 +1,6 @@
 # Story 4.3: Hold Music & Unavailability Message
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -43,8 +43,8 @@ so that I never experience dead air or confusion during a call.
   - [x] 3.4 Ensure both `openclaw-bridge.js` and `claude-bridge.js` error responses trigger the unavailability flow
 
 - [x] Task 4: Add pre-call availability check (AC: #3)
-  - [x] 4.1 In `sip-handler.js`, call `bridge.isAvailable()` before `runConversationLoop()`
-  - [x] 4.2 If unavailable, play unavailability message via `endpoint.play()` and hang up with SIP 480 (Temporarily Unavailable)
+  - [x] 4.1 In `sip-handler.js`, call `bridge.isAvailable()` before `connectCaller()` (not just before `runConversationLoop()`)
+  - [x] 4.2 If unavailable, send SIP 480 (Temporarily Unavailable) via `res.send(480)` before answering the call — avoids wasting a FreeSWITCH endpoint
   - [x] 4.3 Log unavailability at WARN level (no PII — no caller number)
 
 - [x] Task 5: Write tests (AC: #1–#5)
@@ -214,19 +214,19 @@ N/A — implementation proceeded cleanly with no blocking issues.
 - **Task 1.4**: Verified via unit tests that `endpoint.play(HOLD_MUSIC_URL)` is called during query dispatch.
 - **Task 2**: Replaced fire-and-forget hold music with `loopHoldMusic()` recursive pattern using `setImmediate` between loops to yield to event loop. `musicPlaying = false` is now set BEFORE `uuid_break` on all exit paths (normal stop, abort, error) to prevent loop restart.
 - **Task 3**: Both bridges now return `{ response: string, isError: boolean }`. `getUnavailabilityUrl()` helper resolves the right URL (static file or TTS). `conversation-loop.js` checks `result.isError` and plays unavailability message on error, then breaks the loop.
-- **Task 4**: Pre-call `isAvailable({ timeout: 2000 })` check in `sip-handler.js` (2s for NFR-R3). Plays unavailability message and destroys dialog if bridge is down. Logs WARN (no PII).
-- **Task 5**: New test file `voice-app/test/hold-music-unavailability.test.js` with 19 tests across 6 describe blocks covering all ACs. Updated 3 existing test files (`abort-on-hangup.test.js`, `accountid-flow.test.js`, `session-lifecycle.test.js`, `openclaw-bridge.test.js`) to reflect new `{ response, isError }` return shape.
-- **Full test suite**: 264 tests (107 CLI + 70 voice-app + 87 plugin) — all pass, 0 failures.
+- **Task 4**: Pre-call `isAvailable({ timeout: 2000 })` check moved BEFORE `connectCaller()` in `sip-handler.js`. Sends SIP 480 if bridge is down (avoids answering the call and wasting a FreeSWITCH endpoint). Logs WARN (no PII).
+- **Task 5**: New test file `voice-app/test/hold-music-unavailability.test.js` with 20 tests across 6 describe blocks covering all ACs including hold music loop continuation. Updated 3 existing test files to reflect new `{ response, isError }` return shape.
+- **Full test suite**: 265 tests (107 CLI + 71 voice-app + 87 plugin) — all pass, 0 failures.
 - **Linting**: 0 errors (10 pre-existing warnings in brownfield files, unrelated to this story).
 - **AC5 brownfield**: Both bridges return identical `{ response, isError }` shape; `claude-bridge.js` updated in parallel with `openclaw-bridge.js`.
 
 ### File List
 
-- `voice-app/lib/conversation-loop.js` — loopHoldMusic, getUnavailabilityUrl, isError handling
-- `voice-app/lib/openclaw-bridge.js` — return `{ response, isError }`, isAvailable timeout option
-- `voice-app/lib/claude-bridge.js` — return `{ response, isError }`, isAvailable timeout option
-- `voice-app/lib/sip-handler.js` — pre-call isAvailable check
-- `voice-app/test/hold-music-unavailability.test.js` — new test file (19 tests)
+- `voice-app/lib/conversation-loop.js` — loopHoldMusic, getUnavailabilityUrl, isError handling, null guard
+- `voice-app/lib/openclaw-bridge.js` — return `{ response, isError }`, isAvailable timeout option, JSDoc fix
+- `voice-app/lib/claude-bridge.js` — return `{ response, isError }`, explicit 503 handler, JSDoc fix
+- `voice-app/lib/sip-handler.js` — pre-call isAvailable check moved before connectCaller, sends SIP 480
+- `voice-app/test/hold-music-unavailability.test.js` — new test file (20 tests, incl. loop continuation)
 - `voice-app/test/abort-on-hangup.test.js` — updated 2 assertions for new return shape
 - `voice-app/test/accountid-flow.test.js` — updated 1 mock bridge return value
 - `voice-app/test/session-lifecycle.test.js` — updated 3 mock bridge return values
@@ -234,9 +234,12 @@ N/A — implementation proceeded cleanly with no blocking issues.
 - `.env.example` — added UNAVAILABLE_MESSAGE and UNAVAILABLE_AUDIO_URL
 - `docs/TROUBLESHOOTING.md` — added Hold Music & Unavailability section
 - `eslint.config.js` — added setImmediate/clearImmediate to globals
+- `docker-compose.yml` — added ./voice-app/static:/app/static volume mount
+- `cli/lib/docker.js` — added static volume mount to generated docker-compose template
 - `_bmad-output/implementation-artifacts/sprint-status.yaml` — status: in-progress → review
 - `_bmad-output/implementation-artifacts/4-3-hold-music-and-unavailability-message.md` — story updated
 
 ## Change Log
 
 - 2026-02-25: Implemented hold music loop, configurable unavailability message, pre-call availability check, brownfield bridge parity. 19 new tests, 264 total pass. (claude-sonnet-4-6)
+- 2026-02-25: Code review fixes — moved isAvailable check before connectCaller (SIP 480 on rejection), added hold music loop continuation test, fixed JSDoc return types, added explicit 503 handler to claude-bridge, added null guard in conversation-loop, added static volume mount to docker-compose.yml and cli/lib/docker.js. 265 total tests pass. (claude-sonnet-4-6)
