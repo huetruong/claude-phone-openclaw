@@ -163,10 +163,14 @@ async function runConversationLoop(endpoint, dialog, callUuid, options) {
   let forkRunning = false;
   let callActive = true;
   let dtmfHandler = null;
+  let abortController = null;
 
   // Track when call ends to prevent operations on dead endpoints
   const onDialogDestroy = () => {
     callActive = false;
+    if (abortController) {
+      abortController.abort();
+    }
     logger.info('Call ended (dialog destroyed)', { callUuid });
   };
 
@@ -375,10 +379,22 @@ async function runConversationLoop(endpoint, dialog, callUuid, options) {
 
       // 3. Query Claude
       logger.info('Querying Claude', { callUuid });
-      const claudeResponse = await claudeBridge.query(
-        transcript,
-        { callId: callUuid, devicePrompt: devicePrompt, accountId: deviceConfig?.accountId, peerId }
-      );
+      abortController = new AbortController();
+      let claudeResponse;
+      try {
+        claudeResponse = await claudeBridge.query(
+          transcript,
+          { callId: callUuid, devicePrompt: devicePrompt, accountId: deviceConfig?.accountId, peerId, signal: abortController.signal }
+        );
+      } catch (queryError) {
+        if (queryError.code === 'ERR_CANCELED' || (queryError.name === 'CanceledError')) {
+          logger.info('Query aborted (caller hangup)', { callUuid });
+          break;
+        }
+        throw queryError;
+      } finally {
+        abortController = null;
+      }
 
       // 4. Stop hold music
       if (musicPlaying && callActive) {
@@ -436,6 +452,12 @@ async function runConversationLoop(endpoint, dialog, callUuid, options) {
     }
   } finally {
     logger.info('Conversation loop cleanup', { callUuid });
+
+    // Defensively abort any in-flight query
+    if (abortController) {
+      abortController.abort();
+      abortController = null;
+    }
 
     // Remove dialog listener
     dialog.off('destroy', onDialogDestroy);

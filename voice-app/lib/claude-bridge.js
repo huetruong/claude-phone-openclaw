@@ -17,7 +17,7 @@ const CLAUDE_API_URL = process.env.CLAUDE_API_URL || 'http://localhost:3333';
  * @returns {Promise<string>} Claude's response
  */
 async function query(prompt, options = {}) {
-  const { callId, devicePrompt, timeout = 30 } = options; // AC27: Default 30s timeout
+  const { callId, devicePrompt, timeout = 30, signal } = options; // AC27: Default 30s timeout
   const timestamp = new Date().toISOString();
 
   try {
@@ -29,13 +29,16 @@ async function query(prompt, options = {}) {
       console.log(`[${timestamp}] CLAUDE Device prompt: ${devicePrompt.substring(0, 50)}...`);
     }
 
+    const axiosConfig = {
+      timeout: timeout * 1000,
+      headers: { 'Content-Type': 'application/json' }
+    };
+    if (signal) axiosConfig.signal = signal;
+
     const response = await axios.post(
       `${CLAUDE_API_URL}/ask`,
       { prompt, callId, devicePrompt },
-      {
-        timeout: timeout * 1000,
-        headers: { 'Content-Type': 'application/json' }
-      }
+      axiosConfig
     );
 
     if (!response.data.success) {
@@ -49,6 +52,12 @@ async function query(prompt, options = {}) {
     return response.data.response;
 
   } catch (error) {
+    // Abort (caller hangup) — re-throw so conversation loop exits cleanly
+    if (error.code === 'ERR_CANCELED' || error.name === 'CanceledError') {
+      console.log(`[${timestamp}] CLAUDE query aborted (caller hangup)`, callId ? `(${callId})` : '');
+      throw error;
+    }
+
     // AC26: API server unreachable during call - don't crash, return helpful message
     if (error.code === 'ECONNREFUSED' || error.code === 'EHOSTUNREACH' || error.code === 'ENETUNREACH') {
       console.warn(`[${timestamp}] CLAUDE API server unreachable (${error.code})`);
