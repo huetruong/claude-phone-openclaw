@@ -1,43 +1,14 @@
 /**
- * SIP Call Handler with Conversation Loop
- * v12: Device registry integration with proper method names
+ * SIP Call Handler
+ * v13: Inbound path unified with runConversationLoop() (Story 4.1)
  */
 
-const { setTimeout: sleep } = require('node:timers/promises');
-const { checkAllowFrom } = require('./conversation-loop');
+const { runConversationLoop, checkAllowFrom } = require('./conversation-loop');
 const logger = require('./logger');
 
-// Audio cue URLs
-const READY_BEEP_URL = 'http://127.0.0.1:3000/static/ready-beep.wav';
-const GOTIT_BEEP_URL = 'http://127.0.0.1:3000/static/gotit-beep.wav';
-const HOLD_MUSIC_URL = 'http://127.0.0.1:3000/static/hold-music.mp3';
-
-// Default voice ID (Morpheus)
-const DEFAULT_VOICE_ID = 'JAgnJveGGUh4qy4kh6dF';
-
-// Claude Code-style thinking phrases
-const THINKING_PHRASES = [
-  "Pondering...",
-  "Elucidating...",
-  "Cogitating...",
-  "Ruminating...",
-  "Contemplating...",
-  "Consulting the oracle...",
-  "Summoning knowledge...",
-  "Engaging neural pathways...",
-  "Accessing the mainframe...",
-  "Querying the void...",
-  "Let me think about that...",
-  "Processing...",
-  "Hmm, interesting question...",
-  "One moment...",
-  "Searching my brain...",
-];
-
-function getRandomThinkingPhrase() {
-  return THINKING_PHRASES[Math.floor(Math.random() * THINKING_PHRASES.length)];
-}
-
+/**
+ * Extract caller ID (E.164) from SIP From header
+ */
 function extractCallerId(req) {
   var from = req.get("From") || "";
   var match = from.match(/sip:([+\d]+)@/);
@@ -57,229 +28,6 @@ function extractDialedExtension(req) {
     return match[1];
   }
   return null;
-}
-
-function isGoodbye(transcript) {
-  const lower = transcript.toLowerCase().trim();
-  const goodbyePhrases = ['goodbye', 'good bye', 'bye', 'hang up', 'end call', "that's all", 'thats all'];
-  return goodbyePhrases.some(function(phrase) {
-    return lower === phrase || lower.includes(' ' + phrase) ||
-           lower.startsWith(phrase + ' ') || lower.endsWith(' ' + phrase);
-  });
-}
-
-/**
- * Extract voice-friendly line from Claude's response
- * Priority: VOICE_RESPONSE > CUSTOM COMPLETED > COMPLETED > first sentence
- */
-function extractVoiceLine(response) {
-  // Priority 1: VOICE_RESPONSE (new format)
-  var voiceMatch = response.match(/🗣️\s*VOICE_RESPONSE:\s*([^\n]+)/im);
-  if (voiceMatch) {
-    var text = voiceMatch[1].trim().replace(/\*+/g, '').replace(/\[.*?\]/g, '').trim();
-    if (text && text.split(/\s+/).length <= 60) {
-      return text;
-    }
-  }
-
-  // Priority 2: CUSTOM COMPLETED
-  var customMatch = response.match(/🗣️\s*CUSTOM\s+COMPLETED:\s*(.+?)(?:\n|$)/im);
-  if (customMatch) {
-    text = customMatch[1].trim().replace(/\*+/g, '').replace(/\[.*?\]/g, '').trim();
-    if (text && text.split(/\s+/).length <= 50) {
-      return text;
-    }
-  }
-
-  // Priority 3: COMPLETED
-  var completedMatch = response.match(/🎯\s*COMPLETED:\s*(.+?)(?:\n|$)/im);
-  if (completedMatch) {
-    return completedMatch[1].trim().replace(/\*+/g, '').replace(/\[.*?\]/g, '').trim();
-  }
-
-  // Priority 4: First sentence
-  var firstSentence = response.split(/[.!?]/)[0];
-  if (firstSentence && firstSentence.length < 500) {
-    return firstSentence.trim();
-  }
-
-  return response.substring(0, 500).trim();
-}
-
-/**
- * Main conversation loop
- * @param {Object} deviceConfig - Device configuration (name, prompt, voiceId, etc.) or null for default
- */
-async function conversationLoop(endpoint, dialog, callUuid, options, deviceConfig, peerId) {
-  const { ttsService, whisperClient, claudeBridge, wsPort, audioForkServer } = options;
-
-  // ── Caller allowlist check ──
-  if (!checkAllowFrom(deviceConfig, peerId)) {
-    logger.info(`[sip-voice] call rejected: unknown caller on extension ${deviceConfig?.extension}`, { callUuid });
-    logger.debug('Rejected caller details', { callUuid, peerId });
-    try { dialog.destroy(); } catch (e) { /* already destroyed */ }
-    return;
-  }
-
-  let session = null;
-  let forkRunning = false;
-
-  // Get device-specific settings
-  const deviceName = deviceConfig ? deviceConfig.name : 'Morpheus';
-  const devicePrompt = deviceConfig ? deviceConfig.prompt : null;
-  const voiceId = (deviceConfig && deviceConfig.voiceId) ? deviceConfig.voiceId : DEFAULT_VOICE_ID;
-  const greeting = deviceConfig && deviceConfig.name !== 'Morpheus'
-    ? "Hello! I'm " + deviceConfig.name + ". How can I help you today?"
-    : "Hello! I'm your server. How can I help you today?";
-
-  try {
-    console.log('[' + new Date().toISOString() + '] CONVERSATION Starting (session: ' + callUuid + ', device: ' + deviceName + ', voice: ' + voiceId + ')...');
-
-    // Play device-specific greeting with device voice
-    const greetingUrl = await ttsService.generateSpeech(greeting, voiceId);
-    await endpoint.play(greetingUrl);
-
-    // Start fork for entire call
-    const wsUrl = 'ws://127.0.0.1:' + wsPort + '/' + encodeURIComponent(callUuid);
-    const sessionPromise = audioForkServer.expectSession(callUuid, { timeoutMs: 10000 });
-
-    await endpoint.forkAudioStart({
-      wsUrl: wsUrl,
-      mixType: 'mono',
-      sampling: '16k'
-    });
-    forkRunning = true;
-
-    session = await sessionPromise;
-    console.log('[' + new Date().toISOString() + '] AUDIO Fork connected');
-
-    // Main conversation loop
-    let turnCount = 0;
-    const MAX_TURNS = 20;
-
-    while (turnCount < MAX_TURNS) {
-      turnCount++;
-      console.log('[' + new Date().toISOString() + '] CONVERSATION Turn ' + turnCount + '/' + MAX_TURNS);
-
-      // READY BEEP
-      try {
-        await endpoint.play(READY_BEEP_URL);
-      } catch (e) {
-        console.log('[' + new Date().toISOString() + '] BEEP: Ready beep failed, continuing');
-      }
-
-      session.setCaptureEnabled(true);
-      console.log('[' + new Date().toISOString() + '] LISTEN Waiting for speech...');
-
-      let utterance = null;
-      try {
-        utterance = await session.waitForUtterance({ timeoutMs: 30000 });
-        console.log('[' + new Date().toISOString() + '] LISTEN Got: ' + utterance.audio.length + ' bytes');
-      } catch (err) {
-        console.log('[' + new Date().toISOString() + '] LISTEN Timeout: ' + err.message);
-      }
-
-      session.setCaptureEnabled(false);
-
-      if (!utterance) {
-        const promptUrl = await ttsService.generateSpeech("I didn't hear anything. Are you still there?", voiceId);
-        await endpoint.play(promptUrl);
-        continue;
-      }
-
-      // GOT-IT BEEP
-      try {
-        await endpoint.play(GOTIT_BEEP_URL);
-      } catch (e) {
-        console.log('[' + new Date().toISOString() + '] BEEP: Got-it beep failed, continuing');
-      }
-
-      // Transcribe
-      const transcript = await whisperClient.transcribe(utterance.audio, {
-        format: 'pcm',
-        sampleRate: 16000
-      });
-
-      console.log('[' + new Date().toISOString() + '] WHISPER: "' + transcript + '"');
-
-      if (!transcript || transcript.trim().length < 2) {
-        const clarifyUrl = await ttsService.generateSpeech("Sorry, I didn't catch that. Could you repeat?", voiceId);
-        await endpoint.play(clarifyUrl);
-        continue;
-      }
-
-      if (isGoodbye(transcript)) {
-        const byeUrl = await ttsService.generateSpeech("Goodbye! Call again anytime.", voiceId);
-        await endpoint.play(byeUrl);
-        break;
-      }
-
-      // THINKING FEEDBACK
-      const thinkingPhrase = getRandomThinkingPhrase();
-      console.log('[' + new Date().toISOString() + '] THINKING: "' + thinkingPhrase + '"');
-      const thinkingUrl = await ttsService.generateSpeech(thinkingPhrase, voiceId);
-      await endpoint.play(thinkingUrl);
-
-      // Hold music in background
-      let musicPlaying = false;
-      endpoint.play(HOLD_MUSIC_URL).catch(function(e) {
-        console.log('[' + new Date().toISOString() + '] MUSIC: Hold music failed, continuing');
-      });
-      musicPlaying = true;
-
-      // Query Claude with device-specific prompt
-      console.log('[' + new Date().toISOString() + '] CLAUDE Querying (device: ' + deviceName + ')...');
-      const claudeResponse = await claudeBridge.query(
-        transcript,
-        { callId: callUuid, devicePrompt: devicePrompt, accountId: deviceConfig ? deviceConfig.accountId : undefined, peerId: peerId }
-      );
-
-      // Stop hold music
-      if (musicPlaying) {
-        try {
-          await endpoint.api('uuid_break', endpoint.uuid);
-        } catch (e) {}
-      }
-
-      console.log('[' + new Date().toISOString() + '] CLAUDE Response received');
-
-      // Extract and play voice line with device voice
-      const voiceLine = extractVoiceLine(claudeResponse);
-      console.log('[' + new Date().toISOString() + '] VOICE: "' + voiceLine + '"');
-
-      const responseUrl = await ttsService.generateSpeech(voiceLine, voiceId);
-      await endpoint.play(responseUrl);
-
-      console.log('[' + new Date().toISOString() + '] CONVERSATION Turn ' + turnCount + ' complete');
-    }
-
-    if (turnCount >= MAX_TURNS) {
-      const maxUrl = await ttsService.generateSpeech("We've been talking for a while. Goodbye!", voiceId);
-      await endpoint.play(maxUrl);
-    }
-
-  } catch (error) {
-    console.error('[' + new Date().toISOString() + '] CONVERSATION Error:', error.message);
-    try {
-      if (session) session.setCaptureEnabled(false);
-      const errUrl = await ttsService.generateSpeech("Sorry, something went wrong.", voiceId);
-      await endpoint.play(errUrl);
-    } catch (e) {}
-  } finally {
-    console.log('[' + new Date().toISOString() + '] CONVERSATION Cleanup...');
-
-    try {
-      await claudeBridge.endSession(callUuid);
-    } catch (e) {}
-
-    if (forkRunning) {
-      try {
-        await endpoint.forkAudioStop();
-      } catch (e) {}
-    }
-
-    try { dialog.destroy(); } catch (e) {}
-  }
 }
 
 /**
@@ -361,12 +109,26 @@ async function handleInvite(req, res, options) {
 
     console.log('[' + new Date().toISOString() + '] CALL Connected: ' + callUuid);
 
+    // Destroy endpoint when dialog is torn down (handles hangup case)
     dialog.on('destroy', function() {
       console.log('[' + new Date().toISOString() + '] CALL Ended');
       if (endpoint) endpoint.destroy().catch(function() {});
     });
 
-    await conversationLoop(endpoint, dialog, callUuid, options, deviceConfig, callerId);
+    // Run unified conversation loop (handles callActive tracking, cleanup, endSession)
+    await runConversationLoop(endpoint, dialog, callUuid, {
+      audioForkServer: options.audioForkServer,
+      whisperClient: options.whisperClient,
+      claudeBridge: options.claudeBridge,
+      ttsService: options.ttsService,
+      wsPort: options.wsPort,
+      deviceConfig: deviceConfig,
+      peerId: callerId
+    });
+
+    // After conversation ends gracefully (e.g. goodbye), send BYE
+    try { dialog.destroy(); } catch (e) {}
+
     return { endpoint: endpoint, dialog: dialog, callerId: callerId, callUuid: callUuid };
 
   } catch (error) {

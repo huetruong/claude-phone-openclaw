@@ -413,6 +413,63 @@ test('webhook - POST /voice/end-session missing callId in store still returns 20
   });
 });
 
+// ── Session lifecycle: independence between voice-app and agent workspace ─────
+
+test('webhook - POST /voice/end-session does NOT invoke queryAgent (only removes mapping)', async () => {
+  let queryAgentCalled = false;
+  const queryAgent = async () => {
+    queryAgentCalled = true;
+    return 'should not be called';
+  };
+
+  await withServer(makeConfig({ queryAgent }), async (server) => {
+    const sessionStore = require('../src/session-store');
+
+    // Create a session first.
+    await request(server, {
+      path: '/voice/query', method: 'POST', headers: AUTH
+    }, { prompt: 'hi', callId: 'independence-call', accountId: 'morpheus', peerId: '+1' });
+
+    queryAgentCalled = false; // Reset after setup query
+
+    // End the session — must NOT invoke queryAgent (no agent workspace destruction).
+    const res = await request(server, {
+      path: '/voice/end-session', method: 'POST', headers: AUTH
+    }, { callId: 'independence-call' });
+
+    assert.strictEqual(res.status, 200);
+    assert.strictEqual(sessionStore.get('independence-call'), undefined, 'Session mapping must be removed');
+    assert.strictEqual(queryAgentCalled, false,
+      'queryAgent must NOT be called during end-session — agent workspace is independent of voice session');
+  });
+});
+
+test('webhook - new call after hangup creates a fresh session mapping', async () => {
+  await withServer(makeConfig(), async (server) => {
+    const sessionStore = require('../src/session-store');
+
+    // Call 1: create session, then end it (simulate hangup).
+    await request(server, {
+      path: '/voice/query', method: 'POST', headers: AUTH
+    }, { prompt: 'first call', callId: 'call-round-1', accountId: 'morpheus', peerId: '+1' });
+    assert.ok(sessionStore.get('call-round-1'), 'Session must exist during first call');
+
+    await request(server, {
+      path: '/voice/end-session', method: 'POST', headers: AUTH
+    }, { callId: 'call-round-1' });
+    assert.strictEqual(sessionStore.get('call-round-1'), undefined, 'Session must be gone after hangup');
+
+    // Call 2: new callId (drachtio generates fresh UUID per call), new session created.
+    await request(server, {
+      path: '/voice/query', method: 'POST', headers: AUTH
+    }, { prompt: 'second call', callId: 'call-round-2', accountId: 'morpheus', peerId: '+1' });
+    assert.ok(sessionStore.get('call-round-2'),
+      'New session mapping must be created for the new call');
+    assert.strictEqual(sessionStore.get('call-round-1'), undefined,
+      'Old session must remain absent — not reused');
+  });
+});
+
 test('webhook - POST /voice/end-session missing callId field returns 400', async () => {
   await withServer(makeConfig(), async (server) => {
     const res = await request(server, {
