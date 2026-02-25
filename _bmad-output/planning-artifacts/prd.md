@@ -11,7 +11,7 @@ classification:
 
 # Product Requirements Document - claude-phone-vitalpbx
 
-**Author:** Hue
+**Author:** Operator
 **Date:** 2026-02-22
 
 ## Executive Summary
@@ -65,7 +65,7 @@ Multi-agent support means each phone extension is a distinct agent with its own 
 
 **MVP Approach:** Platform MVP — establish SIP voice as a functional, secure OpenClaw channel. The minimum that makes a developer say "this is useful": call an extension, talk to your agent, hang up cleanly. Every extension reaches the right agent. Unknown callers are rejected. The agent persists between calls.
 
-**Resource Profile:** Solo developer (Hue). Implementation order driven by dependency graph.
+**Resource Profile:** Solo developer. Implementation order driven by dependency graph.
 
 ### MVP — Phase 1
 
@@ -74,8 +74,8 @@ Multi-agent support means each phone extension is a distinct agent with its own 
 | `openclaw-bridge.js` drop-in replacement | Core integration point — without it there is no OpenClaw connection |
 | Plugin scaffold + webhook HTTP server | Entry point for OpenClaw channel registration |
 | Extension → agent routing (multi-device) | Single hardcoded agent is not the vision |
-| `allowFrom` / `dmPolicy` enforcement | DID exposure makes spam a real threat on day 1 |
-| Unknown caller rejection + audio message | Public phone number means untrusted callers on day 1 |
+| `allowFrom` enforcement | DID exposure makes spam a real threat on day 1 |
+| Unknown caller rejection (silent hangup) | Public phone number means untrusted callers on day 1 |
 | On-hold MOH during agent processing | Dead air is a worse UX failure than LLM latency |
 | Graceful hangup cleanup | Orphaned OpenClaw sessions accumulate and corrupt state |
 | Caller ID passed to OpenClaw as `peerId` | Required for callback flow |
@@ -91,7 +91,7 @@ Multi-agent support means each phone extension is a distinct agent with its own 
 - Cross-channel response delivery (voice summary → full text in Discord/Telegram/WhatsApp)
 - `place_call` agent tool — registered in OpenClaw, agents can autonomously dial out
 - Full identity linking — map caller phone numbers to Discord/Telegram user IDs
-- `dmPolicy: pairing` — first-contact verification flow via another channel
+- Pairing flow — first-contact verification via another channel (if `dmPolicy` concept revisited)
 - Publish to npm as `openclaw-sip-voice`
 
 ### Vision — Phase 3
@@ -113,20 +113,20 @@ Multi-agent support means each phone extension is a distinct agent with its own 
 ## User Journeys
 
 ### Journey 1: The Operator — First Setup
-*Hue has OpenClaw running with Discord and Telegram already connected. He wants to add voice.*
+*The operator has OpenClaw running with Discord and Telegram already connected. They want to add voice.*
 
-He runs `openclaw plugins install openclaw-sip-voice`. Adds two accounts in OpenClaw config: `morpheus` (ext 9000) and `cephanie` (ext 9001), each with SIP credentials, `voiceId`, and an `allowFrom` list of trusted phone numbers. Sets `dmPolicy: "allowlist"` since the channel is bound to a real DID. Sets `BRIDGE_TYPE=openclaw` in voice-app's `.env` and restarts. Calls ext 9000 from his registered number — hears Morpheus greet him. Calls 9001 — Cephanie answers. Speed-dials 9000, asks "what's the disk usage on the prod server?" — gets a 10-word answer on the call, full breakdown lands in Discord.
+They run `openclaw plugins install openclaw-sip-voice`. Add two accounts in OpenClaw config: `morpheus` (ext 9000) and `cephanie` (ext 9001), each with SIP credentials, `voiceId`, and an `allowFrom` list of trusted phone numbers. Set `BRIDGE_TYPE=openclaw` in voice-app's `.env` and restart. Call ext 9000 from their registered number — hear Morpheus greet them. Call 9001 — Cephanie answers. Speed-dial 9000, ask "what's the disk usage on the prod server?" — get a 10-word answer on the call, full breakdown lands in Discord.
 
-In VitalPBX he configures the DID and an IVR: "Press 1 for Morpheus, press 2 for Cephanie." No plugin changes needed — VitalPBX routes to the extensions; the plugin sees normal inbound INVITEs.
+In VitalPBX they configure the DID and an IVR: "Press 1 for Morpheus, press 2 for Cephanie." No plugin changes needed — VitalPBX routes to the extensions; the plugin sees normal inbound INVITEs.
 
 **Capabilities revealed:** plugin install, config schema, bridge switch, multi-extension routing, cross-channel fallback, `allowFrom` config, IVR compatibility (PBX-side only).
 
 ---
 
 ### Journey 2: The Caller — Inbound Conversation (trusted number)
-*Hue is driving. Calls 9000 via DID.*
+*The operator is driving. Calls 9000 via DID.*
 
-He dials the DID, navigates the IVR, gets routed to ext 9000. Caller ID matches his `allowFrom` entry — agent answers. He says "what's running on the prod server?" Hears hold music for 3 seconds while Morpheus processes. Gets a concise answer. Says "goodbye" — call ends cleanly. Voice-app session tears down; OpenClaw agent workspace persists.
+They dial the DID, navigate the IVR, get routed to ext 9000. Caller ID matches their `allowFrom` entry — agent answers. They say "what's running on the prod server?" Hear hold music for 3 seconds while Morpheus processes. Get a concise answer. Say "goodbye" — call ends cleanly. Voice-app session tears down; OpenClaw agent workspace persists.
 
 **Capabilities revealed:** caller ID verification against `allowFrom`, on-hold MOH during processing, goodbye detection, voice-app-only session teardown (agent persists).
 
@@ -135,25 +135,25 @@ He dials the DID, navigates the IVR, gets routed to ext 9000. Caller ID matches 
 ### Journey 3: The Spammer — Unknown Caller
 *A robocaller or wrong number hits the DID.*
 
-Caller ID is not in `allowFrom`. Plugin detects unknown number, plays configured rejection message, ends the call. Agent is never invoked. No session created. With `dmPolicy: "pairing"`, caller receives a pairing code and instructions to verify via another channel — useful for onboarding new trusted callers without editing config files.
+Caller ID is not in `allowFrom`. Voice-app detects unknown number, silently hangs up. Agent is never invoked. No session created.
 
-**Capabilities revealed:** `dmPolicy` enforcement (allowlist/pairing/open), unknown caller rejection, configurable rejection message, zero agent exposure to untrusted callers.
+**Capabilities revealed:** `allowFrom` enforcement, silent unknown caller rejection, zero agent exposure to untrusted callers.
 
 ---
 
-### Journey 4: Task Delegation + Callback — Hue initiates
-*Hue calls, gives a task, hangs up — agent finishes and calls back.*
+### Journey 4: Task Delegation + Callback — Operator initiates
+*The operator calls, gives a task, hangs up — agent finishes and calls back.*
 
-Hue calls 9000. His number matches `allowFrom` — Morpheus answers. "Clean up logs older than 30 days, call me when done." Hangs up. Voice-app tears down the SIP session; OpenClaw retains full agent context including Hue's phone number (resolved via `identityLinks: { "hue": ["sip-voice:+15551234567"] }`). Morpheus runs cleanup. When done, invokes `place_call` — Hue's phone rings. Brief voice summary. Full log diff in Discord.
+The operator calls 9000. Their number matches `allowFrom` — Morpheus answers. "Clean up logs older than 30 days, call me when done." Hangs up. Voice-app tears down the SIP session; OpenClaw retains full agent context including the operator's phone number (resolved via `identityLinks: { "operator": ["sip-voice:+15551234567"] }`). Morpheus runs cleanup. When done, invokes `place_call` — operator's phone rings. Brief voice summary. Full log diff in Discord.
 
 **Capabilities revealed:** caller number passed to OpenClaw as `peerId` at call start, `identityLinks` maps number to identity for callback, `place_call` tool, `endSession` = voice-app cleanup only (never agent teardown).
 
 ---
 
 ### Journey 5: Task Delegation + Callback — Agent initiates
-*Agent detects problem, calls Hue, receives instructions, calls back when done.*
+*Agent detects problem, calls the operator, receives instructions, calls back when done.*
 
-Morpheus detects CPU at 94% for 10 minutes. Invokes `place_call` to Hue. "CPU critical on prod." Hue says "restart the web server, call me when done." Hangs up. Morpheus restarts the service. When healthy, calls Hue back — brief voice summary, full metrics in Discord.
+Morpheus detects CPU at 94% for 10 minutes. Invokes `place_call` to the operator. "CPU critical on prod." Operator says "restart the web server, call me when done." Hangs up. Morpheus restarts the service. When healthy, calls the operator back — brief voice summary, full metrics in Discord.
 
 **Capabilities revealed:** agent-initiated outbound as first touch, same callback flow. The agent is always running — calls are communication events, not session boundaries.
 
@@ -166,8 +166,8 @@ Morpheus detects CPU at 94% for 10 minutes. Invokes `place_call` to Hue. "CPU cr
 | Plugin install + config schema | J1 | MVP |
 | Multi-extension → agent routing | J1, J2 | MVP |
 | Bridge switching (claude → openclaw) | J1 | MVP |
-| `allowFrom` / `dmPolicy` enforcement | J1, J3 | MVP |
-| Unknown caller rejection + message | J3 | MVP |
+| `allowFrom` enforcement | J1, J3 | MVP |
+| Unknown caller rejection (silent hangup) | J3 | MVP |
 | Caller ID passed to OpenClaw as `peerId` | J2, J4 | MVP |
 | On-hold MOH during processing | J2 | MVP |
 | Goodbye detection + voice-app-only teardown | J2 | MVP |
@@ -181,9 +181,9 @@ Morpheus detects CPU at 94% for 10 minutes. Invokes `place_call` to Hue. "CPU cr
 
 ### Security / Access Control
 - `allowFrom` list validated at call answer time — agent never invoked for unknown callers
+- DID-exposed extensions MUST configure a non-empty `allowFrom`; empty/missing `allowFrom` allows all callers through
 - SIP registration credentials stored with restricted permissions (chmod 600), never written to logs
 - OpenClaw webhook API key treated as a secret — environment variable only, never in config files committed to version control
-- `dmPolicy` defaults to `allowlist` when a DID is configured; `open` only acceptable for internal PBX extensions with no PSTN exposure
 
 ### SIP / VoIP Constraints
 - DID exposure to PSTN means real threat surface: robocalls, SIP scanners, toll fraud — `allowlist` enforcement is the primary mitigation
@@ -243,7 +243,7 @@ This plugin fills that gap — and reuses proven voice infrastructure rather tha
 |---|---|
 | Extension routing | Call 9000 → Morpheus answers; call 9001 → Cephanie answers |
 | Isolation | Two simultaneous callers to 9000 never share context |
-| Callback | Hue calls agent, delegates task, hangs up → agent calls back when done |
+| Callback | Operator calls agent, delegates task, hangs up → agent calls back when done |
 | Cross-channel | Response too long → brief voice summary + full text in Discord |
 | Rejection | Unknown caller → rejection message, agent never invoked |
 | Hold music | Agent processing >1s → caller hears MOH, not silence |
@@ -319,16 +319,15 @@ Note: `allowFrom` entries are stored in E.164 format. The CLI normalizes any int
 sip-voice:
   webhookPort: 47334
   apiKey: "..."
-  dmPolicy: allowlist
   accounts:
     - id: morpheus
       extension: "9000"
-      allowFrom: ["+15551234567"]
+      allowFrom: ["+15551234567"]   # empty/missing = allow all callers
   bindings:
     - accountId: morpheus
       agentId: morpheus
   identityLinks:
-    hue: ["sip-voice:+15551234567"]
+    operator: ["sip-voice:+15551234567"]
 ```
 
 ### Migration Guide (claude-bridge → openclaw-bridge)
@@ -367,8 +366,8 @@ Existing `devices.json` structure is preserved. The bridge swap is backward-comp
 ### Caller Authentication & Access Control
 
 - **FR5:** The system can validate an inbound caller's phone number against a per-extension `allowFrom` allowlist (stored in E.164 format) before invoking an agent
-- **FR6:** The system can reject calls from unknown callers with a configurable audio message, without invoking an agent
-- **FR7:** An operator can configure `dmPolicy` per extension (`allowlist`, `pairing`, `open`) to control caller access rules
+- **FR6:** The system can reject calls from unknown callers (not in `allowFrom`) with a silent hangup, without invoking an agent
+- **FR7:** ~~An operator can configure `dmPolicy` per extension (`allowlist`, `pairing`, `open`) to control caller access rules~~ **REMOVED** — `allowFrom` empty/missing = allow all is sufficient; no separate `dmPolicy` field needed (Story 3.2 code review decision)
 - **FR8:** The webhook endpoint can authenticate requests using an API key, rejecting unauthenticated requests with a 401 response
 
 ### Conversation & Session Management
@@ -425,7 +424,7 @@ Existing `devices.json` structure is preserved. The bridge swap is backward-comp
 - **NFR-S3:** Caller phone numbers logged at DEBUG level only — excluded from INFO, WARN, and ERROR output in production
 - **NFR-S4:** No call audio persisted beyond the in-memory STT buffer — zero recordings stored to disk
 - **NFR-S5:** Webhook endpoint returns HTTP 401 for requests missing a valid API key, before any agent invocation
-- **NFR-S6:** `dmPolicy: allowlist` is the mandatory default for any extension exposed to a DID/PSTN number
+- **NFR-S6:** Any extension exposed to a DID/PSTN number MUST configure a non-empty `allowFrom` list — an empty or missing `allowFrom` allows all callers through
 
 ### Reliability
 

@@ -1,12 +1,12 @@
 'use strict';
 
 /**
- * Tests for caller allowlist validation (Story 3.1)
+ * Tests for caller allowlist validation (Stories 3.1, 3.2)
  *
- * - Unit tests for checkAllowFrom() helper (Tasks 3)
- * - Integration tests for runConversationLoop() rejection flow (Task 4)
- * - PII logging tests: phone number at DEBUG only, not INFO (Task 5)
- * - device-registry passthrough: allowFrom preserved from devices.json (Task 2)
+ * - Unit tests for checkAllowFrom() helper
+ * - Integration tests for runConversationLoop() rejection flow
+ * - PII logging tests: phone number at DEBUG only, not INFO
+ * - device-registry passthrough: allowFrom preserved from devices.json
  */
 
 const { describe, it } = require('node:test');
