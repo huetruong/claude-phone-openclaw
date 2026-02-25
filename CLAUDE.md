@@ -7,7 +7,7 @@ Voice channel for OpenClaw agents via SIP/FreePBX. Call your agent, and your age
 `openclaw-sip-voice` gives OpenClaw agents a SIP telephone presence via FreePBX and BulkVS:
 - **Inbound**: Call an extension and talk to an OpenClaw agent — each extension routes to a distinct agent
 - **Outbound**: Agents can initiate calls autonomously (alerts, task completion callbacks)
-- **Multi-agent**: Speed dial 9000 for ops agent, 9002 for research agent — routing is deterministic
+- **Multi-agent**: Speed dial 9000 for ops agent, 9001 for research agent — routing is deterministic
 
 ## Tech Stack
 
@@ -45,7 +45,7 @@ FreePBX  ← configure trunk + extensions via web GUI
 │  webhook-server.js + session-store.js            │
 │       │                                          │
 │  OpenClaw gateway (in-process)                   │
-│  agents: morpheus (9000), cephanie (9002), ...   │
+│  agents: morpheus (9000), cephanie (9001), ...   │
 └─────────────────────────────────────────────────┘
 ```
 
@@ -82,7 +82,7 @@ claude-phone-freepbx/
 │   ├── openclaw.plugin.json      # Plugin manifest
 │   ├── package.json
 │   └── src/
-│       ├── index.js              # Entry point: api.registerChannel()
+│       ├── index.js              # Entry point: api.registerService()
 │       ├── webhook-server.js     # Express: /voice/query, /voice/end-session, /voice/health
 │       ├── session-store.js      # In-memory Map (callId → sessionId)
 │       ├── auth.js               # Bearer token middleware → 401

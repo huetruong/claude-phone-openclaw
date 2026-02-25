@@ -28,14 +28,14 @@ Every other OpenClaw channel is reactive — Discord messages, Telegram texts, S
 
 The plugin reuses an existing, proven voice stack (`claude-phone-vitalpbx`) rather than introducing new telephony infrastructure. The gap filled is the intelligence layer — replacing the headless `claude-api-server` with OpenClaw's full agent platform: multi-agent routing, persistent memory, tool access, session scoping, and identity linking across channels.
 
-Multi-agent support means each phone extension is a distinct agent with its own personality, workspace, and capabilities. Speed dial 9000 for your ops agent. Speed dial 9002 for your research agent.
+Multi-agent support means each phone extension is a distinct agent with its own personality, workspace, and capabilities. Speed dial 9000 for your ops agent. Speed dial 9001 for your research agent.
 
 ## Success Criteria
 
 ### User Success
 
 - A developer installs the plugin and completes configuration in under 30 minutes
-- Calling extension 9000 reaches agent "morpheus", calling 9002 reaches agent "cephanie" — routing is deterministic and correct
+- Calling extension 9000 reaches agent "morpheus", calling 9001 reaches agent "cephanie" — routing is deterministic and correct
 - The agent's personality, prompt, and voice are applied on every call — not the default
 - An OpenClaw agent autonomously initiates an outbound call with no manual trigger required
 - When a response is too long for voice, the agent says so on the call and the full response appears in the user's configured text channel
@@ -89,7 +89,7 @@ Multi-agent support means each phone extension is a distinct agent with its own 
 ### Growth Features — Phase 2
 
 - Cross-channel response delivery (voice summary → full text in Discord/Telegram/WhatsApp)
-- `phone.call` agent tool — registered in OpenClaw, agents can autonomously dial out
+- `place_call` agent tool — registered in OpenClaw, agents can autonomously dial out
 - Full identity linking — map caller phone numbers to Discord/Telegram user IDs
 - `dmPolicy: pairing` — first-contact verification flow via another channel
 - Publish to npm as `openclaw-sip-voice`
@@ -115,7 +115,7 @@ Multi-agent support means each phone extension is a distinct agent with its own 
 ### Journey 1: The Operator — First Setup
 *Hue has OpenClaw running with Discord and Telegram already connected. He wants to add voice.*
 
-He runs `openclaw plugins install openclaw-sip-voice`. Adds two accounts in OpenClaw config: `morpheus` (ext 9000) and `cephanie` (ext 9002), each with SIP credentials, `voiceId`, and an `allowFrom` list of trusted phone numbers. Sets `dmPolicy: "allowlist"` since the channel is bound to a real DID. Sets `BRIDGE_TYPE=openclaw` in voice-app's `.env` and restarts. Calls ext 9000 from his registered number — hears Morpheus greet him. Calls 9002 — Cephanie answers. Speed-dials 9000, asks "what's the disk usage on the prod server?" — gets a 10-word answer on the call, full breakdown lands in Discord.
+He runs `openclaw plugins install openclaw-sip-voice`. Adds two accounts in OpenClaw config: `morpheus` (ext 9000) and `cephanie` (ext 9001), each with SIP credentials, `voiceId`, and an `allowFrom` list of trusted phone numbers. Sets `dmPolicy: "allowlist"` since the channel is bound to a real DID. Sets `BRIDGE_TYPE=openclaw` in voice-app's `.env` and restarts. Calls ext 9000 from his registered number — hears Morpheus greet him. Calls 9001 — Cephanie answers. Speed-dials 9000, asks "what's the disk usage on the prod server?" — gets a 10-word answer on the call, full breakdown lands in Discord.
 
 In VitalPBX he configures the DID and an IVR: "Press 1 for Morpheus, press 2 for Cephanie." No plugin changes needed — VitalPBX routes to the extensions; the plugin sees normal inbound INVITEs.
 
@@ -144,16 +144,16 @@ Caller ID is not in `allowFrom`. Plugin detects unknown number, plays configured
 ### Journey 4: Task Delegation + Callback — Hue initiates
 *Hue calls, gives a task, hangs up — agent finishes and calls back.*
 
-Hue calls 9000. His number matches `allowFrom` — Morpheus answers. "Clean up logs older than 30 days, call me when done." Hangs up. Voice-app tears down the SIP session; OpenClaw retains full agent context including Hue's phone number (resolved via `identityLinks: { "hue": ["sip-voice:+15551234567"] }`). Morpheus runs cleanup. When done, invokes `phone.call` — Hue's phone rings. Brief voice summary. Full log diff in Discord.
+Hue calls 9000. His number matches `allowFrom` — Morpheus answers. "Clean up logs older than 30 days, call me when done." Hangs up. Voice-app tears down the SIP session; OpenClaw retains full agent context including Hue's phone number (resolved via `identityLinks: { "hue": ["sip-voice:+15551234567"] }`). Morpheus runs cleanup. When done, invokes `place_call` — Hue's phone rings. Brief voice summary. Full log diff in Discord.
 
-**Capabilities revealed:** caller number passed to OpenClaw as `peerId` at call start, `identityLinks` maps number to identity for callback, `phone.call` tool, `endSession` = voice-app cleanup only (never agent teardown).
+**Capabilities revealed:** caller number passed to OpenClaw as `peerId` at call start, `identityLinks` maps number to identity for callback, `place_call` tool, `endSession` = voice-app cleanup only (never agent teardown).
 
 ---
 
 ### Journey 5: Task Delegation + Callback — Agent initiates
 *Agent detects problem, calls Hue, receives instructions, calls back when done.*
 
-Morpheus detects CPU at 94% for 10 minutes. Invokes `phone.call` to Hue. "CPU critical on prod." Hue says "restart the web server, call me when done." Hangs up. Morpheus restarts the service. When healthy, calls Hue back — brief voice summary, full metrics in Discord.
+Morpheus detects CPU at 94% for 10 minutes. Invokes `place_call` to Hue. "CPU critical on prod." Hue says "restart the web server, call me when done." Hangs up. Morpheus restarts the service. When healthy, calls Hue back — brief voice summary, full metrics in Discord.
 
 **Capabilities revealed:** agent-initiated outbound as first touch, same callback flow. The agent is always running — calls are communication events, not session boundaries.
 
@@ -173,7 +173,7 @@ Morpheus detects CPU at 94% for 10 minutes. Invokes `phone.call` to Hue. "CPU cr
 | Goodbye detection + voice-app-only teardown | J2 | MVP |
 | `identityLinks` caller → callback number | J4, J5 | MVP |
 | Cross-channel response delivery | J1, J2 | Growth |
-| `phone.call` agent tool | J4, J5 | Growth |
+| `place_call` agent tool | J4, J5 | Growth |
 | Agent-initiated outbound | J5 | Growth |
 | IVR compatibility (PBX-side config only) | J1 | MVP (docs) |
 
@@ -241,7 +241,7 @@ This plugin fills that gap — and reuses proven voice infrastructure rather tha
 
 | Test | Pass Criteria |
 |---|---|
-| Extension routing | Call 9000 → Morpheus answers; call 9002 → Cephanie answers |
+| Extension routing | Call 9000 → Morpheus answers; call 9001 → Cephanie answers |
 | Isolation | Two simultaneous callers to 9000 never share context |
 | Callback | Hue calls agent, delegates task, hangs up → agent calls back when done |
 | Cross-channel | Response too long → brief voice summary + full text in Discord |

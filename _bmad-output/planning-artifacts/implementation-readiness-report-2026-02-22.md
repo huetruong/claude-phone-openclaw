@@ -167,7 +167,7 @@ Developer experience (DX) is explicitly addressed in the PRD (actionable error m
 - **ACs:** ✅ All Given/When/Then, testable, error conditions covered
 
 #### Epic 2: Multi-Agent Routing & Configuration
-- **User value:** ✅ "Speed-dial 9000 for Morpheus, 9002 for Cephanie" — concrete user outcome
+- **User value:** ✅ "Speed-dial 9000 for Morpheus, 9001 for Cephanie" — concrete user outcome
 - **Independence:** ✅ Builds on Epic 1, standalone without Epics 3/4/5
 - **Story flow:** 2.1 → 2.2 → 2.3 — sequential, no forward references
 - **ACs:** ✅ All Given/When/Then, testable, edge cases covered (missing accountId fallback, unbound accountId 404)

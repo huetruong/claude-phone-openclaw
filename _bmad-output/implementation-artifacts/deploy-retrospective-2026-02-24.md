@@ -222,7 +222,7 @@ The original architecture document and story Dev Notes contained several incorre
 | Test | Command | Result |
 |---|---|---|
 | Plugin health | `GET /voice/health` | `{"ok":true}` ✅ |
-| Dewey agent curl | `POST /voice/query accountId=dewey` | `{"response":"Hey there, Huey! 🦆"}` ✅ |
+| Morpheus agent curl | `POST /voice/query accountId=morpheus` | `{"response":"Hello! How can I help you?"}` ✅ |
 | Cephanie agent curl | `POST /voice/query accountId=cephanie` | `{"response":"Hello! Cephanie here, ready to help."}` ✅ |
 | SIP call ext 9000 | Dial 9000 → morpheus agent responds | ✅ |
 | SIP call ext 9002 | Dial 9002 → cephanie agent responds | ✅ |
