@@ -155,7 +155,7 @@ test('index - register() handles undefined pluginConfig gracefully', () => {
 // Logging
 // ---------------------------------------------------------------------------
 
-test('index - register() logs loaded N account bindings', () => {
+test('index - start() logs loaded N account bindings', async () => {
   const plugin = requireIndex();
   const api = createMockApi({
     accounts: [{ id: 'morpheus' }, { id: 'dewey' }],
@@ -170,17 +170,18 @@ test('index - register() logs loaded N account bindings', () => {
   console.log = (...args) => logLines.push(args.join(' '));
   try {
     plugin.register(api);
+    await api._calls.registerService[0].start();
   } finally {
     console.log = origLog;
   }
 
   const bindingsLog = logLines.find(l => l.includes('loaded') && l.includes('account bindings'));
-  assert.ok(bindingsLog, 'register() must log "loaded N account bindings"');
+  assert.ok(bindingsLog, 'start() must log "loaded N account bindings"');
   assert.ok(bindingsLog.includes('[sip-voice]'), 'Log must include [sip-voice] prefix');
   assert.ok(bindingsLog.includes('loaded 2 account bindings'), 'Must include exact count');
 });
 
-test('index - register() logs "loaded 0 account bindings" when no bindings configured', () => {
+test('index - start() logs "loaded 0 account bindings" when no bindings configured', async () => {
   const plugin = requireIndex();
   const api = createMockApi({});
 
@@ -189,16 +190,17 @@ test('index - register() logs "loaded 0 account bindings" when no bindings confi
   console.log = (...args) => logLines.push(args.join(' '));
   try {
     plugin.register(api);
+    await api._calls.registerService[0].start();
   } finally {
     console.log = origLog;
   }
 
   const bindingsLog = logLines.find(l => l.includes('loaded') && l.includes('account bindings'));
-  assert.ok(bindingsLog, 'register() must log binding count even when zero');
+  assert.ok(bindingsLog, 'start() must log binding count even when zero');
   assert.ok(bindingsLog.includes('loaded 0 account bindings'), 'Must log "loaded 0 account bindings"');
 });
 
-test('index - register() includes account and binding counts in log data', () => {
+test('index - start() includes account and binding counts in log data', async () => {
   const plugin = requireIndex();
   const api = createMockApi({
     accounts: [{ id: 'morpheus' }, { id: 'dewey' }],
@@ -210,6 +212,7 @@ test('index - register() includes account and binding counts in log data', () =>
   console.log = (...args) => logLines.push(args.join(' '));
   try {
     plugin.register(api);
+    await api._calls.registerService[0].start();
   } finally {
     console.log = origLog;
   }
