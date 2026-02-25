@@ -425,7 +425,7 @@ So that new devices are OpenClaw-ready without manual JSON editing.
 
 ## Epic 3: Caller Access Control
 
-Only trusted callers reach agents. Unknown callers hear a rejection message and are disconnected. The operator controls access policy per extension.
+Only trusted callers reach agents. Unknown callers are disconnected. The operator controls access policy per extension.
 
 ### Story 3.1: Caller Allowlist Validation
 
@@ -462,30 +462,26 @@ So that only trusted phone numbers can reach my agents.
 ### Story 3.2: Unknown Caller Rejection & DM Policy
 
 As an operator,
-I want unknown callers to hear a configurable rejection message and be disconnected, with configurable access policy per extension,
+I want unknown callers to be disconnected and a configurable `dmPolicy` per extension,
 So that spammers and unauthorized callers never reach my agents.
 
 **Acceptance Criteria:**
 
 **Given** an inbound call from an unknown caller (not in `allowFrom`) arrives on a `dmPolicy: "allowlist"` extension
 **When** the voice-app rejects the call
-**Then** the caller hears a configurable audio rejection message before the call is disconnected
+**Then** the call is disconnected immediately (silent hangup) — no agent invoked, no session created
 
-**Given** the `dmPolicy` field is not set for an extension that is exposed to a DID/PSTN number
-**When** the voice-app loads the device configuration
+**Given** the `dmPolicy` field is not set for an extension
+**When** the voice-app evaluates the caller
 **Then** `dmPolicy` defaults to `"allowlist"` (NFR-S6 — mandatory default for DID-exposed extensions)
 
 **Given** `dmPolicy` is set to `"open"` for an extension
 **When** any caller dials that extension
 **Then** all callers are accepted regardless of `allowFrom` (suitable only for internal PBX extensions with no PSTN exposure)
 
-**Given** `dmPolicy` is set to `"pairing"` for an extension
-**When** an unknown caller dials that extension
-**Then** the caller receives a pairing code and instructions to verify via another channel (Growth scope — stub implementation acceptable at MVP)
-
 **Given** a call is rejected due to `dmPolicy` enforcement
 **When** the rejection occurs
-**Then** the agent is never invoked, no session is created, and the event is logged at INFO level as `[sip-voice] call rejected: unknown caller on extension <ext>` (without the phone number)
+**Then** the event is logged at INFO level as `[sip-voice] call rejected: unknown caller on extension <ext>` (without the phone number)
 
 ## Epic 4: Call Quality & Session Lifecycle
 

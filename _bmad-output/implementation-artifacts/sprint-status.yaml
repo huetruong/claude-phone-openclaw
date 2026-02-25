@@ -56,7 +56,7 @@ development_status:
 
   epic-3: in-progress
   3-1-caller-allowlist-validation: done
-  3-2-unknown-caller-rejection-and-dm-policy: backlog
+  3-2-unknown-caller-rejection-and-dm-policy: ready-for-dev
   epic-3-retrospective: optional
 
   epic-4: backlog
