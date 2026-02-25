@@ -118,7 +118,7 @@ call devices
 | Device | Extension | Voice | Description |
 |--------|-----------|-------|-------------|
 | **Morpheus** | 9000 | Male | Default assistant |
-| **Cephanie** | 9002 | Female | Storage server personality |
+| **Cephanie** | 9001 | Female | Storage server personality |
 
 ## Examples
 
@@ -182,7 +182,7 @@ DEVICES = {
     },
     "cephanie": {
         "name": "Cephanie",
-        "extension": "9002",
+        "extension": "9001",
         "description": "Storage server (sassy personality)"
     },
 }

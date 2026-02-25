@@ -49,6 +49,8 @@ FR17: The system can play a configurable audio message to the caller when the ag
 FR18: An OpenClaw agent can initiate an outbound call to a phone number via the voice-app API
 FR19: An operator can trigger an outbound call programmatically via the voice-app REST API
 FR20: The system can resolve a caller identity via `identityLinks` config to a callback phone number for agent-initiated outbound
+FR32: The plugin registers a `place_call` tool and `SKILL.md` so OpenClaw agents can autonomously initiate outbound calls with awareness of when and how to use the capability
+FR33: When a voice response exceeds what speech can carry usefully, the agent delivers a brief voice summary and routes the full response to the user's active primary channel (Discord, Telegram, Slack)
 
 **Plugin Integration (OpenClaw Channel)**
 
@@ -104,7 +106,7 @@ NFR-I4: Plugin installs without native build dependencies on a standard Linux VP
 
 - **Brownfield foundation**: No starter template — existing drachtio + FreeSWITCH + FreePBX codebase is the base; voice-app changes are minimal (one new file: `openclaw-bridge.js`)
 - **Bridge loader**: `BRIDGE_TYPE` env var selects bridge at runtime (`const bridge = require('./lib/${bridgeType}-bridge')`) — one env var, one require() line, no new files in voice-app beyond the bridge itself
-- **Plugin API contract**: OpenClaw plugin API is `api.registerChannel()` + `api.registerGatewayMethod()` (NOT `gateway.start()` / `gateway.on()` as PRD assumed) — architecture-confirmed correction
+- **Plugin API contract**: OpenClaw plugin API uses `api.registerService()` for service plugins — NOT `api.registerChannel()` (requires full ChannelPlugin interface). Deployment-confirmed. See `docs/openclaw-plugin-architecture.md`.
 - **CommonJS only**: Both `voice-app` and `openclaw-plugin` must use CommonJS (`require`/`module.exports`) — ESM breaks the drachtio ecosystem
 - **Async discipline**: All plugin code must be non-blocking (async/await, `fs.promises`) — synchronous I/O blocks all agents on the OpenClaw gateway event loop
 - **Bridge interface (MANDATORY)**: `openclaw-bridge.js` must export exactly `{ query(prompt, callId, deviceConfig), endSession(callId), isAvailable() }` — no additional exports, no renamed methods, no changed signatures
@@ -155,6 +157,8 @@ NFR-I4: Plugin installs without native build dependencies on a standard Linux VP
 | FR29 | Epic 2 | Agent bindings in plugin config |
 | FR30 | Epic 5 | Identity link configuration |
 | FR31 | Epic 4 | PII-safe logging at appropriate levels |
+| FR32 | Epic 5 | place_call tool + SKILL.md agent skill registration |
+| FR33 | Epic 5 | Cross-channel response delivery (brief voice + full text in primary channel) |
 
 ## Epic List
 
@@ -163,7 +167,7 @@ An operator can install the plugin, configure the bridge, call an extension, and
 **FRs covered:** FR1, FR8, FR9, FR14, FR15, FR21, FR22, FR23, FR27
 
 ### Epic 2: Multi-Agent Routing & Configuration
-An operator can configure multiple extensions, each bound to a distinct agent, with structured config files. Speed-dial 9000 for Morpheus, 9002 for Cephanie — routing is deterministic.
+An operator can configure multiple extensions, each bound to a distinct agent, with structured config files. Speed-dial 9000 for Morpheus, 9001 for Cephanie — routing is deterministic.
 **FRs covered:** FR2, FR3, FR4, FR26, FR28, FR29
 
 ### Epic 3: Caller Access Control
@@ -175,8 +179,8 @@ Calls are smooth — hold music plays during agent processing (no dead air), han
 **FRs covered:** FR10, FR11, FR12, FR13, FR16, FR17, FR24, FR25, FR31
 
 ### Epic 5: Outbound Calling & Identity Resolution
-Agents can initiate calls to users (callbacks after task completion), operators can trigger outbound calls via API, and the system resolves user identities across channels for callback number lookup.
-**FRs covered:** FR18, FR19, FR20, FR30
+Agents can initiate calls to users (callbacks after task completion), operators can trigger outbound calls via API, the system resolves user identities across channels for callback number lookup, and agents use voice as an intelligent medium selector — brief summaries on the call, full detail in the primary channel.
+**FRs covered:** FR18, FR19, FR20, FR30, FR32, FR33
 
 ## Epic 1: Inbound Call to OpenClaw Agent
 
@@ -307,7 +311,7 @@ So that my existing voice-app routes calls through OpenClaw instead of Claude CL
 
 ## Epic 2: Multi-Agent Routing & Configuration
 
-An operator can configure multiple extensions, each bound to a distinct agent, with structured config files. Speed-dial 9000 for Morpheus, 9002 for Cephanie — routing is deterministic.
+An operator can configure multiple extensions, each bound to a distinct agent, with structured config files. Speed-dial 9000 for Morpheus, 9001 for Cephanie — routing is deterministic.
 
 ### Story 2.1: Device Configuration with accountId
 
@@ -337,11 +341,11 @@ So that each SIP extension is bound to a specific agent.
 
 As an operator,
 I want to configure agent bindings in the plugin config so each extension routes to its specific agent,
-So that calling 9000 always reaches Morpheus and 9002 always reaches Cephanie.
+So that calling 9000 always reaches Morpheus and 9001 always reaches Cephanie.
 
 **Acceptance Criteria:**
 
-**Given** the plugin config contains `accounts: [{ id: "morpheus", extension: "9000" }, { id: "cephanie", extension: "9002" }]` and `bindings: [{ accountId: "morpheus", agentId: "morpheus" }, { accountId: "cephanie", agentId: "cephanie" }]`
+**Given** the plugin config contains `accounts: [{ id: "morpheus", extension: "9000" }, { id: "cephanie", extension: "9001" }]` and `bindings: [{ accountId: "morpheus", agentId: "morpheus" }, { accountId: "cephanie", agentId: "cephanie" }]`
 **When** the plugin starts
 **Then** the plugin loads all account and binding entries and logs `[sip-voice] loaded 2 account bindings`
 
@@ -381,7 +385,7 @@ So that two simultaneous calls to extension 9000 never share context.
 **When** `POST /voice/end-session` is sent for caller A's `callId`
 **Then** only caller A's session mapping is removed; caller B's session continues unaffected
 
-**Given** the multi-registrar (`multi-registrar.js`) registers extensions 9000 and 9002 with the PBX
+**Given** the multi-registrar (`multi-registrar.js`) registers extensions 9000 and 9001 with the PBX
 **When** a network interruption occurs and recovers
 **Then** both registrations re-establish automatically without manual intervention (FR3 brownfield verified)
 
@@ -582,6 +586,10 @@ So that I can maintain the system without coordinated restarts and without leaki
 
 Agents can initiate calls to users (callbacks after task completion), operators can trigger outbound calls via API, and the system resolves user identities across channels for callback number lookup.
 
+> **Design principle (verified 2026-02-24):** Two call modes — choose the right one:
+> - **`announce`**: Brief, one-way. Speak like you'd leave a voicemail — one clear thought, then let the channel carry the rest.
+> - **`conversation`**: Two-way, interactive. Use when the user needs to give instructions, ask questions, or make decisions in real time. This is a real phone call — let it breathe.
+
 ### Story 5.1: Plugin-Triggered Outbound Calls
 
 As an OpenClaw agent,
@@ -591,8 +599,12 @@ So that I can call users back after completing a task.
 **Acceptance Criteria:**
 
 **Given** the plugin needs to initiate an outbound call to a user
-**When** the plugin sends `POST /api/outbound-call` to the voice-app with body `{ "to": "+15551234567", "accountId": "morpheus", "message": "Your task is complete." }`
+**When** the plugin sends `POST /api/outbound-call` to the voice-app with body `{ "to": "12125550100", "device": "9000", "message": "Your task is complete." }`
 **Then** the voice-app initiates a SIP call to the specified phone number using the agent's configured extension and voice
+
+> **Note — conversation mode:** The outbound handler supports `mode: "announce"` (one-way, default) and `mode: "conversation"` (two-way back-and-forth). Conversation mode uses `runConversationLoop` — the same function as inbound calls — so it works with the OpenClaw bridge automatically. No additional work needed.
+
+> **Note (verified 2026-02-24):** Use `device` (extension number or device name, e.g. `"9000"` or `"morpheus"`) — NOT `accountId`. The `device` param is used to look up the entry in `devices.json` for SIP credentials and `voiceId`. `accountId` is ignored by the outbound route. Phone number should be passed without `+` prefix (e.g. `"12125550100"`) — the `+` prefix triggers a `9` PSTN dial prefix in the outbound handler.
 
 **Given** the outbound call is answered by the recipient
 **When** the call connects
@@ -606,7 +618,7 @@ So that I can call users back after completing a task.
 **When** the HTTP request fails
 **Then** the plugin logs the error at ERROR level with `[sip-voice]` prefix and does not crash — the error is reported back to the OpenClaw agent
 
-**Given** the outbound call is initiated with `accountId: "morpheus"`
+**Given** the outbound call is initiated with `device: "9000"`
 **When** the voice-app looks up the device config
 **Then** the call uses Morpheus's SIP credentials, extension, and voice settings from `devices.json`
 
@@ -637,3 +649,59 @@ So that agents can resolve a user's callback number from their identity across c
 **Given** the `peerId` passed during an inbound call matches an `identityLinks` entry
 **When** the agent later needs to call back the same user
 **Then** the agent can resolve the user's identity to the callback number without the caller needing to provide their number verbally
+
+### Story 5.3: Agent Skill Registration (place_call tool + SKILL.md) — FR32
+
+As an OpenClaw agent (Morpheus, Cephanie),
+I want a `place_call` tool registered by the plugin and a `SKILL.md` loaded into my context,
+So that I know when and how to initiate an outbound call autonomously.
+
+**Design notes:**
+- Plugin registers `api.registerTool('place_call', ...)` — gives agents the capability
+- `SKILL.md` loaded via `"skills": ["./skills"]` in `openclaw.plugin.json` — gives agents the instructions
+- `SKILL.md` must clearly explain both modes so agents don't assume voice is announce-only:
+  - **`announce`**: Speak like you'd leave a voicemail — one clear thought, then let the channel carry the rest
+  - **`conversation`**: Two-way, interactive — use when the user needs to give instructions, ask questions, or make decisions in real time
+
+**Acceptance Criteria:**
+
+**Given** the plugin is loaded by the OpenClaw gateway
+**When** an agent's context is initialized
+**Then** the `place_call` tool is available to the agent and the `SKILL.md` instructions are loaded into the agent's context
+
+**Given** a user says "call me when this task is done"
+**When** the task completes
+**Then** the agent posts the full result to the primary channel first, then calls with a brief summary (e.g. "Your deployment finished. Check Discord for details.")
+
+**Given** the agent calls `place_call` with `{ to, device, message, mode }`
+**When** the tool executes
+**Then** it POSTs to `POST /api/outbound-call` on the voice-app and returns `{ callId, status }` to the agent
+
+**Given** the voice-app is unreachable
+**When** the agent calls `place_call`
+**Then** the tool returns an error and the agent falls back to delivering the update via the primary channel only
+
+### Story 5.4: Cross-Channel Response Delivery — FR33
+
+As an OpenClaw agent,
+I want to detect when my response is too long or complex for voice,
+So that I deliver a brief voice summary and route the full response to the user's primary channel.
+
+**Design notes:**
+- Voice is intentionally low-bandwidth — 1-2 sentences max for spoken delivery
+- Primary channel = wherever the user is active (Discord, Telegram, Slack)
+- This is intelligent medium selection, not a fallback — the agent chooses the right channel for the content
+
+**Acceptance Criteria:**
+
+**Given** the agent's response exceeds ~40 words or contains structured data (lists, diffs, metrics, code)
+**When** the agent prepares the voice reply
+**Then** the agent speaks a brief summary (e.g. "Deployment finished. Full report in Discord.") and sends the complete response to the user's configured primary channel
+
+**Given** the agent's response is concise and conversational
+**When** the agent prepares the voice reply
+**Then** the full response is spoken — no cross-channel delivery needed
+
+**Given** no primary channel is configured for the user
+**When** a long response would normally be routed to the primary channel
+**Then** the agent speaks a truncated version and informs the user no text channel is configured

@@ -50,7 +50,7 @@ _This document builds collaboratively through step-by-step discovery. Sections a
 - No TypeScript compilation step — plain JS with JSDoc if needed
 - FreePBX chosen as reference PBX (free, open-source, Asterisk-based); voice-app is PBX-agnostic at the SIP layer
 - BulkVS as SIP trunk provider (existing operator account)
-- PRD correction: OpenClaw plugin API is `api.registerChannel()` + `api.registerGatewayMethod()` (not `gateway.start()` / `gateway.on()` as PRD assumed)
+- Deployment-confirmed: OpenClaw plugin API uses `api.registerService()` for service plugins — NOT `api.registerChannel()` (requires full ChannelPlugin interface) or `gateway.start()` / `gateway.on()` as PRD originally assumed. See `docs/openclaw-plugin-architecture.md`.
 
 ### Cross-Cutting Concerns Identified
 
@@ -87,7 +87,7 @@ mkdir openclaw-plugin && cd openclaw-plugin && npm init -y
 **Critical Decisions (Block Implementation):**
 - Session state: in-memory Map (callId → OpenClaw sessionId) per plugin process lifetime
 - HTTP framework: Express (consistent with voice-app)
-- Plugin approach: Option B — channel plugin via `api.registerChannel()`
+- Plugin approach: Option B — service plugin via `api.registerService()`
 
 **Important Decisions (Shape Architecture):**
 - MOH: SIP re-INVITE best-effort only; silence if PBX doesn't support it
@@ -305,7 +305,7 @@ claude-phone-freepbx/                  ← repo root (rename from claude-phone-v
 │   ├── openclaw.plugin.json           ← plugin manifest
 │   ├── package.json
 │   ├── src/
-│   │   ├── index.js                   ← entry point: api.registerChannel()
+│   │   ├── index.js                   ← entry point: api.registerService()
 │   │   ├── webhook-server.js          ← Express: /voice/query, /voice/end-session, /voice/health
 │   │   ├── session-store.js           ← in-memory Map (callId → sessionId)
 │   │   ├── auth.js                    ← Bearer token middleware → 401
@@ -426,7 +426,7 @@ All 31 functional requirements and 19 non-functional requirements are architectu
 **✅ Architectural Decisions**
 - [x] Session state: in-memory Map (confirmed against OpenClaw restart behavior)
 - [x] HTTP framework: Express
-- [x] Plugin approach: Option B — channel plugin via `api.registerChannel()`
+- [x] Plugin approach: Option B — service plugin via `api.registerService()` (deployment-confirmed)
 - [x] PBX: FreePBX (reference); voice-app PBX-agnostic
 - [x] MOH: SIP re-INVITE best-effort, silence fallback
 
@@ -460,14 +460,14 @@ All 31 functional requirements and 19 non-functional requirements are architectu
 - Option C: self-hosted VoiceCallProvider for OpenClaw voice-call extension (community contribution)
 - Redis session store (once OpenClaw fixes bug #3290)
 - Cross-channel response delivery (Phase 2)
-- `phone.call` agent tool registration (Phase 2)
+- `place_call` agent tool registration (Phase 2 — Epic 5 Story 5.3)
 
 ### Implementation Handoff
 
 **First implementation priority:** `voice-app/lib/openclaw-bridge.js`
 Use jayis1's gemini-api-server as the direct template — replace Gemini CLI subprocess with HTTP POST to OpenClaw webhook.
 
-**Second:** `openclaw-plugin/src/` scaffold — `webhook-server.js`, `auth.js`, `session-store.js`, `index.js` with `api.registerChannel()`
+**Second:** `openclaw-plugin/src/` scaffold — `webhook-server.js`, `auth.js`, `session-store.js`, `index.js` with `api.registerService()`
 
 **AI Agent Guidelines:**
 - Follow bridge interface contract exactly — verify against `claude-bridge.js`
