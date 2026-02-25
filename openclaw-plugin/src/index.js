@@ -72,11 +72,6 @@ const plugin = {
     const accounts = config.accounts || [];
     const bindings = config.bindings || [];
 
-    logger.info(`loaded ${bindings.length} account bindings`, {
-      accounts: accounts.length,
-      bindings: bindings.length,
-    });
-
     // Reap stale sessions from prior gateway runs (OpenClaw bug #3290).
     sessionStore.clear();
 
@@ -133,6 +128,10 @@ const plugin = {
       id: 'sip-voice-webhook',
 
       start: async () => {
+        logger.info(`loaded ${bindings.length} account bindings`, {
+          accounts: accounts.length,
+          bindings: bindings.length,
+        });
         const app = createServer({
           apiKey: config.apiKey,
           bindings,
