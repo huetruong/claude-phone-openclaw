@@ -219,6 +219,9 @@ if [ -d "$INSTALL_DIR" ]; then
   echo "Updating existing installation..."
   cd "$INSTALL_DIR"
   git pull origin main
+  cd "$INSTALL_DIR/cli"
+  npm install --silent --production
+  cd "$INSTALL_DIR"
 else
   echo "Cloning Claude Phone..."
   git clone "$REPO_URL" "$INSTALL_DIR"
