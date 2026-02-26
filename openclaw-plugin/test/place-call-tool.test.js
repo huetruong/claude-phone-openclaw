@@ -131,6 +131,22 @@ test('place_call - handler passes voiceAppUrl from plugin config', async () => {
   assert.strictEqual(lastPlaceCallArgs.voiceAppUrl, 'http://my-voice-app:4000');
 });
 
+test('place_call - handler passes null voiceAppUrl when not configured', async () => {
+  lastPlaceCallArgs = null;
+  mockPlaceCallResult = { error: 'invalid voiceAppUrl: Invalid URL' };
+
+  const plugin = requireIndex();
+  const api = createMockApi({ accounts: [], bindings: [] }); // no voiceAppUrl
+  plugin.register(api);
+  const tool = getPlaceCallTool(api);
+
+  const result = await tool.handler({ to: '+15551234567', device: '9000', message: 'Test' });
+
+  assert.ok(lastPlaceCallArgs, 'outboundClient.placeCall must be called even when voiceAppUrl is null');
+  assert.strictEqual(lastPlaceCallArgs.voiceAppUrl, null, 'voiceAppUrl should be null when not configured');
+  assert.ok(result.error, 'Must return error when voiceAppUrl is null');
+});
+
 test('place_call - handler works when mode is omitted (passes undefined, outboundClient handles default)', async () => {
   lastPlaceCallArgs = null;
   mockPlaceCallResult = { callId: 'test-no-mode', status: 'initiated' };

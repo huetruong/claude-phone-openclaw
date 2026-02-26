@@ -750,7 +750,38 @@ So that I know when and how to initiate outbound calls and enroll new callers au
 **When** the agent encounters an unenrolled first-time caller
 **Then** the agent follows the enrollment instructions: ask for name, ask for channels, call `link_identity`
 
-### Story 5.5: Identity Resolution for Outbound Callbacks — FR20, FR30
+### Story 5.5: Persistent Per-Identity Session Context
+
+As a returning caller (e.g. Hue calling in via SIP),
+I want the agent to remember our previous conversations,
+So that context carries over across calls without me having to repeat myself.
+
+**Design notes:**
+- Currently `sessionFile` is keyed by `callId` (UUID) — brand new file every call, no memory
+- Fix: key by `identityContext.identity` (enrolled name) or normalized `peerId` (phone digits only, no `+`) for unenrolled but returning callers; fall back to `callId` if neither is available
+- Each agent maintains its own history per caller: `morpheus-hue.jsonl`, `cephanie-hue.jsonl`
+- `runEmbeddedPiAgent` already reads the sessionFile on start and appends each turn — no API change needed
+- `sessionKey` must also change to match (used for in-process deduplication)
+
+**Acceptance Criteria:**
+
+**Given** a caller with enrolled identity "hue" calls in
+**When** `queryAgent` resolves the session file path
+**Then** `sessionFile` is `sip-voice/morpheus-hue.jsonl` (keyed by identity name, not callId) and the agent has full context from prior calls
+
+**Given** an unenrolled but returning caller with `peerId = "+15551234567"` calls in
+**When** `queryAgent` resolves the session file path
+**Then** `sessionFile` is `sip-voice/morpheus-15551234567.jsonl` (normalized phone, no `+`) so context accumulates even before enrollment
+
+**Given** no `peerId` is available (extension-only call, no CLI number)
+**When** `queryAgent` resolves the session file path
+**Then** `sessionFile` falls back to `sip-voice/morpheus-<callId>.jsonl` (ephemeral, current behaviour)
+
+**Given** a caller enrolls mid-call (first-time caller who completes enrollment)
+**When** subsequent calls arrive from the same number
+**Then** the session file transitions to identity-keyed on the next call (no migration of the phone-keyed file required)
+
+### Story 5.6: Identity Resolution for Outbound Callbacks — FR20, FR30
 
 As an operator,
 I want agents to resolve a caller's identity to a callback phone number automatically,
@@ -774,7 +805,9 @@ So that an agent can call someone back using only their canonical name — no ph
 **When** the agent later needs to call back the same caller
 **Then** the agent can resolve their callback number from `session.identityLinks` without the caller needing to provide it verbally
 
-### Story 5.6: Cross-Channel Response Delivery — FR33
+_Note: depends on Story 5.5 for full context — agent will have prior conversation history when placing the callback._
+
+### Story 5.7: Cross-Channel Response Delivery — FR33
 
 As an OpenClaw agent,
 I want to detect when my response is too long or complex for voice,

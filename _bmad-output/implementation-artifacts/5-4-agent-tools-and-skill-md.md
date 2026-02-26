@@ -1,6 +1,6 @@
 # Story 5.4: Agent Tools & SKILL.md
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -336,3 +336,4 @@ None — clean implementation, no blockers encountered.
 ## Change Log
 
 - 2026-02-26: Implemented story 5-4 — place_call agent tool registration, SKILL.md creation, manifest skills field, and full test suite (10 new tests). 379 total tests passing.
+- 2026-02-26: Code review fixes — removed dead plugin.placeCall stub; injected phone into first-time CALLER CONTEXT (enrollment was impossible without it); added maxLength:1000 to place_call schema; debug log for to destination; null-voiceAppUrl handler test; SKILL.md multi-user enrollment guidance. 380 total tests passing.

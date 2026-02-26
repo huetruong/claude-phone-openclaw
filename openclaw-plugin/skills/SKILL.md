@@ -60,37 +60,48 @@ place_call({
 
 ## Tool: `link_identity`
 
-Enrolls a new caller by linking their phone number to a canonical identity.
+Enrolls a caller by linking their phone number to a canonical identity.
+Multiple callers can be enrolled — each person gets their own identity (owner, partner, etc.).
 
 ### Parameters
 
 | Parameter  | Type     | Required | Description |
 |------------|----------|----------|-------------|
 | `name`     | string   | yes      | Canonical name for this person (e.g. `"hue"`) |
-| `peerId`   | string   | yes      | Their phone number (provided in caller context) |
+| `peerId`   | string   | yes      | Their phone number — use the `phone` value from `[CALLER CONTEXT]` |
 | `channels` | string[] | no       | Additional channel identifiers (e.g. `["discord:987654321"]`) |
 
 ### Return value
 
 On success: `{ ok: true, identity: string }`
+On failure: `{ ok: false, error: string }`
 
 ### Enrollment flow
 
-Trigger enrollment when you receive `[CALLER CONTEXT: First-time caller, no identity on file]`.
+Trigger enrollment when you receive:
+`[CALLER CONTEXT: First-time caller, no identity on file, phone="+15551234567"]`
 
 1. Ask the caller for their name.
 2. Optionally ask if they want to link other channels (Discord, email, etc.).
-3. Call `link_identity` with the collected information.
+3. Call `link_identity` using the `phone` value from CALLER CONTEXT as `peerId`.
 4. Greet them by name going forward.
+
+**Important:** Use the `phone` value from `[CALLER CONTEXT]` directly as `peerId` — do not ask the caller for their phone number.
 
 ### Example
 
 ```
-// First-time caller enrolled
+// First-time caller with phone="+15551234567" enrolled as "hue"
 link_identity({
   name: "hue",
   peerId: "+15551234567",
   channels: ["discord:987654321"]
+})
+
+// A second caller with phone="+15559876543" enrolled as "alice"
+link_identity({
+  name: "alice",
+  peerId: "+15559876543"
 })
 ```
 
@@ -110,4 +121,4 @@ When a caller has an identity on file, you will receive:
 ## Error Handling
 
 - **Voice-app unreachable** (`place_call` returns `{ error }`): Inform the user via the primary channel. Do not attempt to call again without user instruction.
-- **Enrollment fails** (`link_identity` returns an error): Let the caller know and continue the conversation without enrollment; retry next call.
+- **Enrollment fails** (`link_identity` returns `{ ok: false }`): Let the caller know and continue the conversation without enrollment; retry next call.

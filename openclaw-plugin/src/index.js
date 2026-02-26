@@ -78,9 +78,6 @@ const plugin = {
       logger.warn('voiceAppUrl not configured — outbound calls will fail until set in plugin config');
     }
 
-    // Internal function: place an outbound call via the voice-app REST API.
-    plugin.placeCall = (params) => outboundClient.placeCall({ voiceAppUrl, ...params });
-
     // Register link_identity agent tool — allows agents to enroll new callers
     // by linking their phone number to a canonical identity in openclaw.json.
     api.registerTool({
@@ -110,7 +107,7 @@ const plugin = {
         properties: {
           to: { type: 'string', description: 'Destination phone number (E.164) or extension' },
           device: { type: 'string', description: 'Extension/device name to call from (e.g., "9000")' },
-          message: { type: 'string', description: 'TTS message to play when call is answered (max 1000 chars)' },
+          message: { type: 'string', maxLength: 1000, description: 'TTS message to play when call is answered (max 1000 chars)' },
           mode: {
             type: 'string',
             enum: ['announce', 'conversation'],
@@ -121,6 +118,7 @@ const plugin = {
       },
       handler: async ({ to, device, message, mode }) => {
         logger.info('place_call tool invoked', { device });
+        logger.debug('place_call destination', { to });
         const result = await outboundClient.placeCall({ voiceAppUrl, to, device, message, mode });
         if (result.error) {
           logger.warn('place_call failed', { error: result.error });
@@ -146,10 +144,12 @@ const plugin = {
       const ocConfig = api.config;
 
       // Prepend caller context so the agent knows whether to run enrollment flow.
+      // For first-time callers, include the phone number so the agent can pass it
+      // to link_identity — without it, enrollment is impossible.
       let enrichedPrompt = prompt;
       if (identityContext) {
         const ctxLine = identityContext.isFirstCall
-          ? '[CALLER CONTEXT: First-time caller, no identity on file]'
+          ? `[CALLER CONTEXT: First-time caller, no identity on file${peerId ? `, phone="${peerId}"` : ''}]`
           : `[CALLER CONTEXT: Known caller, identity="${identityContext.identity}"]`;
         enrichedPrompt = ctxLine + '\n' + prompt;
       }

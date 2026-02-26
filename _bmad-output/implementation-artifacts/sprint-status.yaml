@@ -70,7 +70,8 @@ development_status:
   5-1-plugin-triggered-outbound-calls: done
   5-2-dynamic-identity-enrollment: done
   5-3-dynamic-greeting-and-call-continuity: done
-  5-4-agent-tools-and-skill-md: review
-  5-5-identity-resolution-outbound-callbacks: backlog
-  5-6-cross-channel-response-delivery: backlog
+  5-4-agent-tools-and-skill-md: done
+  5-5-persistent-per-identity-session-context: backlog
+  5-6-identity-resolution-outbound-callbacks: backlog
+  5-7-cross-channel-response-delivery: backlog
   epic-5-retrospective: optional
