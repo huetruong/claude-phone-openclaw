@@ -72,6 +72,6 @@ development_status:
   5-3-dynamic-greeting-and-call-continuity: done
   5-4-agent-tools-and-skill-md: done
   5-5-persistent-per-identity-session-context: review
-  5-6-identity-resolution-outbound-callbacks: review
+  5-6-identity-resolution-outbound-callbacks: done
   5-7-cross-channel-response-delivery: backlog
   epic-5-retrospective: optional

@@ -95,7 +95,9 @@ const plugin = {
     const pluginLinks = config.identityLinks || {};
     const linkCount = Object.keys(pluginLinks).length;
     if (linkCount > 0) {
-      logger.info(`[sip-voice] loaded ${linkCount} identity link(s)`);
+      logger.info(`loaded ${linkCount} identity link(s)`);
+    } else {
+      logger.debug('no identity links configured');
     }
 
     // Register link_identity agent tool — allows agents to enroll new callers
@@ -125,7 +127,7 @@ const plugin = {
       schema: {
         type: 'object',
         properties: {
-          to: { type: 'string', description: 'Destination phone number (E.164) or extension' },
+          to: { type: 'string', description: 'Destination: phone number (E.164, e.g. "+15551234567"), extension (e.g. "9001"), or identity name (e.g. "operator")' },
           device: { type: 'string', description: 'Extension/device name to call from (e.g., "9000")' },
           message: { type: 'string', maxLength: 1000, description: 'TTS message to play when call is answered (max 1000 chars)' },
           mode: {
@@ -145,11 +147,11 @@ const plugin = {
         if (to && !to.startsWith('+') && !/^\d+$/.test(to)) {
           const phone = resolveCallbackNumber(config, api.config, to);
           if (phone) {
-            logger.info('[sip-voice] identity resolved for callback', { identity: to });
-            logger.debug('[sip-voice] resolved phone', { phone });
+            logger.info('identity resolved for callback', { identity: to });
+            logger.debug('resolved phone', { phone });
             resolvedTo = phone;
           } else {
-            logger.warn('[sip-voice] no SIP callback number for identity', { identity: to });
+            logger.warn('no SIP callback number for identity', { identity: to });
             return { error: `no SIP callback number configured for identity '${to}'` };
           }
         }

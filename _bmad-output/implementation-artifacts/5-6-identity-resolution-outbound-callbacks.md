@@ -1,6 +1,6 @@
 # Story 5.6: Identity Resolution for Outbound Callbacks
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -68,7 +68,7 @@ so that an agent can call someone back using only their canonical name — no ph
   - [x] 6.5 Test: `to` as identity name in session config resolves to phone number (AC #4)
 
 - [x] Task 7: Verify all existing tests pass (AC: all)
-  - [x] 7.1 Run full test suite (`npm test`), verify all 387+ tests pass — 398 tests pass (107 CLI + 126 voice-app + 165 plugin)
+  - [x] 7.1 Run full test suite (`npm test`), verify all 387+ tests pass — 400 tests pass (107 CLI + 126 voice-app + 167 plugin)
   - [x] 7.2 Verify no regressions in place_call, identity, or webhook tests
 
 ## Dev Notes
@@ -306,7 +306,8 @@ None — implementation was straightforward following story spec.
 - Updated `SKILL.md` `to` parameter docs and added identity name call example.
 - Added 6 unit tests for `resolveCallbackNumber` in `identity.test.js` (plugin config, session config, precedence, no sip-voice entry, unknown identity, empty config).
 - Added 5 handler tests in `place-call-tool.test.js` (plugin resolve, session resolve, not-found error, phone passthrough, extension passthrough).
-- Final test count: 398 total (107 CLI + 126 voice-app + 165 plugin), +11 new plugin tests. 0 failures. 0 lint errors.
+- Final test count: 400 total (107 CLI + 126 voice-app + 167 plugin), +13 new plugin tests. 0 failures. 0 lint errors.
+- Code review fixes: removed double `[sip-voice]` prefix from 4 new log lines; updated `place_call` schema `to` description to include identity names; added startup log test (2 tests); fixed AC4 test to use actual `link_identity` stored format (no `+`).
 
 ### File List
 
@@ -321,3 +322,4 @@ None — implementation was straightforward following story spec.
 ## Change Log
 
 - 2026-02-26: Implemented Story 5.6 — identity resolution for outbound callbacks. Added `resolveCallbackNumber()` function, updated `place_call` handler with identity name detection and resolution, added startup identity link count logging, updated SKILL.md, added 11 tests (398 total).
+- 2026-02-26: Code review fixes — removed double `[sip-voice]` prefix from 4 log lines; updated `place_call` schema `to` description to mention identity names; added 2 startup log tests; fixed AC4 test format to match `link_identity` stored format. 400 total tests.

@@ -238,13 +238,59 @@ test('place_call - identity name in session config resolves to phone number', as
 
   const plugin = requireIndex();
   const api = createMockApi({ voiceAppUrl: 'http://voice-app:3000', accounts: [], bindings: [] });
-  api.config = { session: { identityLinks: { hue: ['sip-voice:+15559876543'] } } };
+  // Use format without '+' — matches what link_identity actually stores (strips leading +)
+  api.config = { session: { identityLinks: { hue: ['sip-voice:15559876543'] } } };
   plugin.register(api);
   const tool = getPlaceCallTool(api);
 
   const result = await tool.handler({ to: 'hue', device: '9000', message: 'Task done' });
 
   assert.ok(lastPlaceCallArgs, 'outboundClient.placeCall must be called');
-  assert.strictEqual(lastPlaceCallArgs.to, '+15559876543', 'must resolve identity from session config');
+  assert.strictEqual(lastPlaceCallArgs.to, '15559876543', 'must resolve identity from session config');
   assert.deepStrictEqual(result, { callId: 'session-id-call', status: 'initiated' });
+});
+
+// ---------------------------------------------------------------------------
+// place_call startup — identity link count logging (AC1)
+// ---------------------------------------------------------------------------
+
+test('place_call startup - logs identity link count when identityLinks configured', () => {
+  const logMessages = [];
+  const origLog = console.log;
+  console.log = (msg) => logMessages.push(msg);
+
+  try {
+    const plugin = requireIndex();
+    const api = createMockApi({
+      voiceAppUrl: 'http://voice-app:3000',
+      accounts: [],
+      bindings: [],
+      identityLinks: { operator: ['sip-voice:+15551234567'], hue: ['sip-voice:15559876543'] },
+    });
+    plugin.register(api);
+  } finally {
+    console.log = origLog;
+  }
+
+  const loadedLog = logMessages.find(m => m.includes('loaded') && m.includes('identity link'));
+  assert.ok(loadedLog, 'must log identity link count on startup');
+  assert.ok(loadedLog.includes('2'), 'must log the correct count (2)');
+  assert.ok(!loadedLog.includes('[sip-voice] [sip-voice]'), 'must not have double [sip-voice] prefix');
+});
+
+test('place_call startup - no identity link log when identityLinks not configured', () => {
+  const logMessages = [];
+  const origLog = console.log;
+  console.log = (msg) => logMessages.push(msg);
+
+  try {
+    const plugin = requireIndex();
+    const api = createMockApi({ voiceAppUrl: 'http://voice-app:3000', accounts: [], bindings: [] });
+    plugin.register(api);
+  } finally {
+    console.log = origLog;
+  }
+
+  const loadedLog = logMessages.find(m => m.includes('loaded') && m.includes('identity link'));
+  assert.strictEqual(loadedLog, undefined, 'must not log identity link count when none configured');
 });
