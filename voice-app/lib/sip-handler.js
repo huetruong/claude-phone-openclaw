@@ -85,7 +85,9 @@ async function handleInvite(req, res, options) {
     }
   }
 
-  console.log('[' + new Date().toISOString() + '] CALL Incoming from: ' + callerId + ' to ext: ' + (dialedExt || 'unknown'));
+  // PII discipline: callerId at DEBUG only (NFR-S3)
+  logger.debug('Incoming call details', { peerId: callerId, extension: dialedExt || 'unknown' });
+  logger.info('Incoming call', { extension: dialedExt || 'unknown' });
 
   // ── Caller allowlist check — reject BEFORE answering ──
   if (!checkAllowFrom(deviceConfig, callerId)) {
@@ -138,7 +140,7 @@ async function handleInvite(req, res, options) {
     // After conversation ends gracefully (e.g. goodbye), send BYE
     try { dialog.destroy(); } catch (e) {}
 
-    return { endpoint: endpoint, dialog: dialog, callerId: callerId, callUuid: callUuid };
+    return { endpoint: endpoint, dialog: dialog, callUuid: callUuid };
 
   } catch (error) {
     console.error('[' + new Date().toISOString() + '] CALL Error:', error.message);
