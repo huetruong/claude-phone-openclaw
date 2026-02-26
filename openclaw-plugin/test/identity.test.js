@@ -300,6 +300,52 @@ test('identity - link_identity: missing name returns { ok: false, error } withou
   assert.strictEqual(api._writes.length, 0, 'must not write config when name is missing');
 });
 
+// ── resolveCallbackNumber ───────────────────────────────────────────────────
+
+test('identity - resolveCallbackNumber: returns phone from plugin config', () => {
+  const { resolveCallbackNumber } = requireIdentity();
+  const pluginConfig = { identityLinks: { operator: ['sip-voice:+15551234567'] } };
+  const result = resolveCallbackNumber(pluginConfig, {}, 'operator');
+  assert.strictEqual(result, '+15551234567');
+});
+
+test('identity - resolveCallbackNumber: returns phone from session config when not in plugin config', () => {
+  const { resolveCallbackNumber } = requireIdentity();
+  const ocConfig = { session: { identityLinks: { hue: ['sip-voice:+15559876543'] } } };
+  const result = resolveCallbackNumber({}, ocConfig, 'hue');
+  assert.strictEqual(result, '+15559876543');
+});
+
+test('identity - resolveCallbackNumber: plugin config takes precedence over session config', () => {
+  const { resolveCallbackNumber } = requireIdentity();
+  const pluginConfig = { identityLinks: { operator: ['sip-voice:+11111111111'] } };
+  const ocConfig = { session: { identityLinks: { operator: ['sip-voice:+22222222222'] } } };
+  const result = resolveCallbackNumber(pluginConfig, ocConfig, 'operator');
+  assert.strictEqual(result, '+11111111111');
+});
+
+test('identity - resolveCallbackNumber: identity with no sip-voice entry returns null', () => {
+  const { resolveCallbackNumber } = requireIdentity();
+  const pluginConfig = { identityLinks: { operator: ['discord:operatorhandle'] } };
+  const ocConfig = { session: { identityLinks: { operator: ['telegram:@operator'] } } };
+  const result = resolveCallbackNumber(pluginConfig, ocConfig, 'operator');
+  assert.strictEqual(result, null);
+});
+
+test('identity - resolveCallbackNumber: unknown identity returns null', () => {
+  const { resolveCallbackNumber } = requireIdentity();
+  const pluginConfig = { identityLinks: { operator: ['sip-voice:+15551234567'] } };
+  const result = resolveCallbackNumber(pluginConfig, {}, 'unknown');
+  assert.strictEqual(result, null);
+});
+
+test('identity - resolveCallbackNumber: empty/missing identityLinks returns null', () => {
+  const { resolveCallbackNumber } = requireIdentity();
+  assert.strictEqual(resolveCallbackNumber(null, null, 'operator'), null);
+  assert.strictEqual(resolveCallbackNumber({}, {}, 'operator'), null);
+  assert.strictEqual(resolveCallbackNumber({ identityLinks: {} }, { session: { identityLinks: {} } }, 'operator'), null);
+});
+
 test('identity - link_identity: concurrent enrollments are serialized by mutex', async () => {
   const { createLinkIdentityHandler } = requireIdentity();
 
