@@ -55,6 +55,20 @@ async function getExtensionAPI() {
 // Plugin
 // ---------------------------------------------------------------------------
 
+/**
+ * Determines the session suffix for file naming and session key.
+ * Priority: enrolled identity name > normalized phone > callId (ephemeral).
+ */
+function resolveSessionSuffix(identityContext, peerId, callId) {
+  if (identityContext && identityContext.identity) {
+    return identityContext.identity;
+  }
+  if (peerId) {
+    return peerId.replace(/^\+/, '');
+  }
+  return callId;
+}
+
 let _server = null;
 
 const plugin = {
@@ -136,8 +150,8 @@ const plugin = {
     // queryAgent — routes a voice prompt to a named OpenClaw agent.
     //
     // Uses runEmbeddedPiAgent from extensionAPI.js to run the agent
-    // in-process. Session is scoped per-agent per-call so concurrent
-    // calls to different agents are fully isolated.
+    // in-process. Session is keyed by caller identity (enrolled name
+    // or phone number) so context persists across calls.
     // ------------------------------------------------------------------
     const queryAgent = async (agentId, sessionId, prompt, peerId, identityContext) => {
       const ext = await getExtensionAPI();
@@ -154,17 +168,18 @@ const plugin = {
         enrichedPrompt = ctxLine + '\n' + prompt;
       }
 
-      const sessionKey = `sip-voice:${agentId}:${sessionId}`;
+      const suffix = resolveSessionSuffix(identityContext, peerId, sessionId);
+      const sessionKey = `sip-voice:${agentId}:${suffix}`;
       const storePath = path.dirname(ext.resolveStorePath(ocConfig?.session?.store));
       const agentDir = ext.resolveAgentDir(ocConfig, agentId);
       const workspaceDir = ext.resolveAgentWorkspaceDir(ocConfig, agentId);
-      const sessionFile = path.join(storePath, 'sip-voice', `${agentId}-${sessionId}.jsonl`);
+      const sessionFile = path.join(storePath, 'sip-voice', `${agentId}-${suffix}.jsonl`);
 
       // Ensure workspace dir exists before running agent.
       await ext.ensureAgentWorkspace({ dir: workspaceDir });
 
       const result = await ext.runEmbeddedPiAgent({
-        sessionId,
+        sessionId: suffix,
         sessionKey,
         messageProvider: 'sip-voice',
         sessionFile,
@@ -220,5 +235,8 @@ const plugin = {
     });
   },
 };
+
+// Expose resolveSessionSuffix for test access (prefixed with _ to signal internal).
+plugin._resolveSessionSuffix = resolveSessionSuffix;
 
 module.exports = plugin;
