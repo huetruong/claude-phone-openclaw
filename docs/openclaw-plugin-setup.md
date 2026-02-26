@@ -24,10 +24,8 @@ sip-voice:
   accounts:
     - id: morpheus
       extension: "9000"
-      allowFrom: ["+15551234567"]  # Caller allowlist; empty/missing = allow all
     - id: cephanie
       extension: "9001"
-      allowFrom: []
   bindings:
     - accountId: morpheus
       agentId: morpheus
@@ -44,10 +42,10 @@ sip-voice:
 | `webhookPort` | number | No (default: 47334) | Port the plugin webhook server listens on |
 | `apiKey` | string | Yes | Bearer token for voice-app → plugin auth |
 | `voiceAppUrl` | string | Yes (for outbound calls) | Base URL of voice-app REST API, e.g. `http://host:3000/api` |
-| `accounts` | array | Yes | SIP device accounts with extension and allowFrom list |
+| `accounts` | array | Yes | SIP device accounts (id + extension) used for agent binding |
 | `bindings` | array | Yes | Maps accountId (device) to agentId (OpenClaw agent) |
 | `identityLinks` | object | No | Maps operator names to SIP identity strings |
-| `dmPolicy` | string | No (default: "allowlist") | How to handle callers not in allowFrom |
+| `dmPolicy` | string | No (default: "allowlist") | How the voice-app handles callers not in allowFrom |
 | `agentTimeoutMs` | number | No (default: 30000) | Agent response timeout in milliseconds |
 
 ### `voiceAppUrl` Detail
@@ -61,6 +59,22 @@ The `voiceAppUrl` field enables the plugin to trigger outbound calls on behalf o
 The plugin appends `/outbound-call` to this URL when placing calls.
 
 **Network note:** The voice-app and OpenClaw plugin may run on different servers. Ensure the OpenClaw gateway can reach the voice-app on port 3000 over the internal network.
+
+### Caller Allowlists (`allowFrom`)
+
+Caller allowlist enforcement happens in the **voice-app**, not the plugin. Configure `allowFrom` per device in `voice-app/config/devices.json`:
+
+```json
+{
+  "extension": "9000",
+  "name": "morpheus",
+  "accountId": "morpheus",
+  "allowFrom": ["+15551234567"]
+}
+```
+
+- Empty or missing `allowFrom` → allow all callers
+- DID-exposed extensions should always set a non-empty `allowFrom`
 
 ## Voice-App Configuration
 
