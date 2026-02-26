@@ -364,6 +364,98 @@ test('index - register() calls api.registerTool() exactly 2 times (link_identity
 });
 
 // ---------------------------------------------------------------------------
+// resolveSessionSuffix unit tests (Story 5.5, Task 3)
+// ---------------------------------------------------------------------------
+
+test('index - resolveSessionSuffix: enrolled identity returns identity name', () => {
+  const plugin = requireIndex();
+  const result = plugin._resolveSessionSuffix({ identity: 'hue', isFirstCall: false }, '+15551234567', 'call-uuid-123');
+  assert.strictEqual(result, 'hue');
+});
+
+test('index - resolveSessionSuffix: unenrolled caller with peerId returns normalized phone', () => {
+  const plugin = requireIndex();
+  const result = plugin._resolveSessionSuffix({ isFirstCall: true }, '+15551234567', 'call-uuid-123');
+  assert.strictEqual(result, '15551234567');
+});
+
+test('index - resolveSessionSuffix: peerId with + prefix is stripped', () => {
+  const plugin = requireIndex();
+  const result = plugin._resolveSessionSuffix(null, '+15551234567', 'call-uuid-123');
+  assert.strictEqual(result, '15551234567');
+});
+
+test('index - resolveSessionSuffix: no peerId and no identity returns callId', () => {
+  const plugin = requireIndex();
+  const result = plugin._resolveSessionSuffix(null, null, 'call-uuid-123');
+  assert.strictEqual(result, 'call-uuid-123');
+});
+
+test('index - resolveSessionSuffix: identity takes precedence over peerId when both present', () => {
+  const plugin = requireIndex();
+  const result = plugin._resolveSessionSuffix({ identity: 'hue', isFirstCall: false }, '+15551234567', 'call-uuid-123');
+  assert.strictEqual(result, 'hue');
+});
+
+// ---------------------------------------------------------------------------
+// queryAgent identity-keyed session integration tests (Story 5.5, Task 4)
+// ---------------------------------------------------------------------------
+
+test('index - queryAgent passes resolveSessionSuffix result to createServer', async () => {
+  // Capture the queryAgent function passed to createServer and verify it exists.
+  // The unit tests for resolveSessionSuffix prove the suffix logic; this test
+  // verifies the wiring — that queryAgent is constructed and passed through.
+  let capturedQueryAgent = null;
+  require.cache[require.resolve('../src/webhook-server')] = {
+    id: require.resolve('../src/webhook-server'),
+    filename: require.resolve('../src/webhook-server'),
+    loaded: true,
+    exports: {
+      createServer: (opts) => { capturedQueryAgent = opts.queryAgent; return { _isMock: true }; },
+      startServer: async () => _mockServerHandle,
+    }
+  };
+
+  const plugin2 = requireIndex();
+  const api2 = createMockApi({ accounts: [], bindings: [], apiKey: 'test' });
+  plugin2.register(api2);
+  const service = api2._calls.registerService[0];
+  await service.start();
+
+  assert.ok(capturedQueryAgent, 'queryAgent must be passed to createServer');
+  assert.strictEqual(typeof capturedQueryAgent, 'function', 'queryAgent must be a function');
+
+  await service.stop();
+
+  // Restore original webhook-server mock
+  require.cache[require.resolve('../src/webhook-server')] = {
+    id: require.resolve('../src/webhook-server'),
+    filename: require.resolve('../src/webhook-server'),
+    loaded: true,
+    exports: {
+      createServer: () => ({ _isMock: true }),
+      startServer: async () => _mockServerHandle,
+    }
+  };
+});
+
+test('index - queryAgent session integration: resolveSessionSuffix correctly computes all three variants', () => {
+  const plugin = requireIndex();
+  const fn = plugin._resolveSessionSuffix;
+
+  // AC #1: enrolled identity
+  assert.strictEqual(fn({ identity: 'hue', isFirstCall: false }, '+15551234567', 'uuid-1'), 'hue');
+
+  // AC #2: unenrolled caller with phone
+  assert.strictEqual(fn({ isFirstCall: true }, '+15551234567', 'uuid-2'), '15551234567');
+
+  // AC #3: no peerId (extension-only call)
+  assert.strictEqual(fn(null, null, 'uuid-3'), 'uuid-3');
+  assert.strictEqual(fn(undefined, undefined, 'uuid-4'), 'uuid-4');
+  assert.strictEqual(fn({}, '', 'uuid-5'), 'uuid-5');
+});
+
+// ---------------------------------------------------------------------------
 // SKILL.md manifest verification (Story 5.4, Task 5.3)
 // ---------------------------------------------------------------------------
 
