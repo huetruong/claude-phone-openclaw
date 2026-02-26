@@ -59,14 +59,18 @@ development_status:
   3-2-unknown-caller-rejection-and-dm-policy: done
   epic-3-retrospective: done  # epic-3-retro-2026-02-25.md
 
-  epic-4: in-progress
+  epic-4: done
   4-1-independent-session-lifecycle: done
   4-2-in-flight-query-abort-on-hangup: done
   4-3-hold-music-and-unavailability-message: done
   4-4-plugin-lifecycle-and-pii-safe-logging: done
-  epic-4-retrospective: optional
+  epic-4-retrospective: done  # epic-4-retro-2026-02-25.md
 
   epic-5: backlog
   5-1-plugin-triggered-outbound-calls: backlog
-  5-2-identity-resolution-via-identitylinks: backlog
+  5-2-dynamic-identity-enrollment: backlog
+  5-3-dynamic-greeting-and-call-continuity: backlog
+  5-4-agent-tools-and-skill-md: backlog
+  5-5-identity-resolution-outbound-callbacks: backlog
+  5-6-cross-channel-response-delivery: backlog
   epic-5-retrospective: optional

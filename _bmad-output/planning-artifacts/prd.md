@@ -90,8 +90,10 @@ Multi-agent support means each phone extension is a distinct agent with its own 
 
 - Cross-channel response delivery (voice summary → full text in Discord/Telegram/WhatsApp)
 - `place_call` agent tool — registered in OpenClaw, agents can autonomously dial out
-- Full identity linking — map caller phone numbers to Discord/Telegram user IDs
-- Pairing flow — first-contact verification via another channel (if `dmPolicy` concept revisited)
+- `link_identity` agent tool — dynamic first-call enrollment, no manual `identityLinks` config required
+- Dynamic greeting — agent controls opening of every inbound call via initial bridge query
+- Call continuity — agent greets returning callers by name and references last conversation
+- Full identity linking — cross-channel session merging (one conversation across voice, Discord, Telegram)
 - Publish to npm as `openclaw-sip-voice`
 
 ### Vision — Phase 3
@@ -175,6 +177,9 @@ Morpheus detects CPU at 94% for 10 minutes. Invokes `place_call` to the operator
 | Cross-channel response delivery | J1, J2 | Growth |
 | `place_call` agent tool | J4, J5 | Growth |
 | Agent-initiated outbound | J5 | Growth |
+| Dynamic agent greeting (replaces hardcoded) | J1, J2 | Growth |
+| Call continuity (agent references last conversation) | J2 | Growth |
+| First-call identity enrollment via `link_identity` | J2, J4 | Growth |
 | IVR compatibility (PBX-side config only) | J1 | MVP (docs) |
 
 ## Domain-Specific Requirements
@@ -407,6 +412,11 @@ Existing `devices.json` structure is preserved. The bridge swap is backward-comp
 - **FR29:** An operator can configure agent bindings (extension → agent) in the OpenClaw plugin config
 - **FR30:** An operator can configure identity links (user identity → phone number) for callback resolution
 - **FR31:** The system can log events at appropriate severity levels, excluding caller phone numbers from INFO/WARN logs in production
+- **FR32:** The plugin registers a `place_call` tool and `SKILL.md` so OpenClaw agents can autonomously initiate outbound calls with awareness of when and how to use the capability
+- **FR33:** When a voice response exceeds what speech can carry usefully, the agent delivers a brief voice summary and routes the full response to the user's active primary channel (Discord, Telegram, Slack)
+- **FR34:** The system replaces the hardcoded greeting in `conversation-loop.js` with an initial bridge query so the OpenClaw agent controls the opening of every inbound call; hold music plays during generation preventing dead air
+- **FR35:** The agent greets returning callers by their canonical name and references relevant context from the last conversation, providing call continuity across sessions
+- **FR36:** The plugin detects first-time callers (not present in `session.identityLinks`) and enables the agent to run an enrollment conversation; the `link_identity` tool writes the result to `openclaw.json` dynamically — no manual operator config required to onboard new users
 
 ## Non-Functional Requirements
 

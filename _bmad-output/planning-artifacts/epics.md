@@ -153,6 +153,9 @@ NFR-C3: A `region.defaultCountry` (ISO 3166-1 alpha-2) MUST be configured during
 | FR19 | Epic 5 | API-triggered outbound call |
 | FR20 | Epic 5 | Identity resolution via identityLinks |
 | FR21 | Epic 1 | Register SIP voice channel with OpenClaw |
+| FR34 | Epic 5 | Dynamic greeting — agent controls opening of every call via initial bridge query; hold music plays during generation |
+| FR35 | Epic 5 | Call continuity — agent greets returning callers by name and references last conversation context |
+| FR36 | Epic 5 | First-call identity enrollment — agent detects unlinked callers, runs enrollment conversation, writes identityLinks entry dynamically via `link_identity` tool |
 | FR22 | Epic 1 | Route voice query to correct agent |
 | FR23 | Epic 1 | Receive and return agent responses |
 | FR24 | Epic 4 | Notify OpenClaw of session end |
@@ -184,9 +187,9 @@ Only trusted callers reach agents. Unknown callers are silently disconnected. Op
 Calls are smooth — hold music plays during agent processing (no dead air), hangups are clean, in-flight queries are aborted, sessions don't orphan, errors produce graceful audio messages, and logging is PII-safe.
 **FRs covered:** FR10, FR11, FR12, FR13, FR16, FR17, FR24, FR25, FR31
 
-### Epic 5: Outbound Calling & Identity Resolution
-Agents can initiate calls to users (callbacks after task completion), operators can trigger outbound calls via API, the system resolves user identities across channels for callback number lookup, and agents use voice as an intelligent medium selector — brief summaries on the call, full detail in the primary channel.
-**FRs covered:** FR18, FR19, FR20, FR30, FR32, FR33
+### Epic 5: Outbound Calling, Identity & Dynamic Greeting
+Agents can initiate calls to users (callbacks after task completion), operators can trigger outbound calls via API, callers are recognized by name on every call with the agent greeting them personally and picking up the last conversation thread, new callers are enrolled dynamically on first call without any manual config, and agents use voice as an intelligent medium selector — brief summaries on the call, full detail in the primary channel.
+**FRs covered:** FR18, FR19, FR20, FR30, FR32, FR33, FR34, FR35, FR36
 
 ## Epic 1: Inbound Call to OpenClaw Agent
 
@@ -590,9 +593,9 @@ So that I can maintain the system without coordinated restarts and without leaki
 **When** the caller says "goodbye" or similar farewell phrases
 **Then** the call ends cleanly through the same flow as a manual hangup — bridge `endSession()` is called and session is cleaned up (FR13 brownfield verified)
 
-## Epic 5: Outbound Calling & Identity Resolution
+## Epic 5: Outbound Calling, Identity & Dynamic Greeting
 
-Agents can initiate calls to users (callbacks after task completion), operators can trigger outbound calls via API, and the system resolves user identities across channels for callback number lookup.
+Agents can initiate calls to users (callbacks after task completion), operators can trigger outbound calls via API, callers are recognized and greeted by name on every call with the agent referencing the last conversation, new callers self-enroll on first call, and agents use voice as an intelligent medium selector.
 
 > **Design principle (verified 2026-02-24):** Two call modes — choose the right one:
 > - **`announce`**: Brief, one-way. Speak like you'd leave a voicemail — one clear thought, then let the channel carry the rest.
@@ -630,66 +633,148 @@ So that I can call users back after completing a task.
 **When** the voice-app looks up the device config
 **Then** the call uses Morpheus's SIP credentials, extension, and voice settings from `devices.json`
 
-### Story 5.2: Identity Resolution via identityLinks
+### Story 5.2: Dynamic Identity Enrollment — FR36
 
-As an operator,
-I want to configure identity links mapping user identities to phone numbers,
-So that agents can resolve a user's callback number from their identity across channels.
+As a caller who is new to the system,
+I want the agent to recognize I'm a first-time caller and guide me through a quick enrollment,
+So that future calls know who I am and share my session context across all my channels — without the operator needing to manually configure anything.
+
+**Design notes:**
+- `allowFrom` in `devices.json` remains the security gate — operator still pre-adds trusted phone numbers
+- Dynamic enrollment handles identity AFTER the number is trusted: who is this caller and how do they want to be known?
+- Plugin checks `session.identityLinks` in `openclaw.json` on every inbound call to determine if the caller is enrolled
+- Plugin registers a `link_identity` tool via `api.registerTool()` so the agent can write the enrollment result
+- `link_identity` uses `api.runtime.config.writeConfigFile()` to persist the new entry to `openclaw.json`
+- Enrolled callers get cross-channel session merging: `morpheus:main:sip-voice:direct:hue` same as `morpheus:main:discord:direct:987654321`
 
 **Acceptance Criteria:**
 
-**Given** the plugin config contains `identityLinks: { "operator": ["sip-voice:+15551234567"] }`
-**When** the plugin starts
-**Then** the identity links are loaded and available for lookup, and the plugin logs `[sip-voice] loaded 1 identity link(s)`
+**Given** an inbound call arrives from a phone number not present in `session.identityLinks`
+**When** the plugin processes the initial query
+**Then** the plugin passes `{ isFirstCall: true }` alongside the query so the agent knows to run enrollment
 
-**Given** an OpenClaw agent needs to call back user "operator"
-**When** the plugin resolves the identity "operator" via identityLinks
-**Then** the plugin extracts the phone number `+15551234567` from the `sip-voice:` prefixed entry
+**Given** the agent detects `isFirstCall: true` in its context
+**When** generating the opening of the conversation
+**Then** the agent introduces itself and asks the caller their name and which channels they use (Discord, Telegram, web UI, etc.)
 
-**Given** an identity has multiple `sip-voice:` entries (e.g., `["sip-voice:+15551234567", "sip-voice:+15559876543"]`)
-**When** the plugin resolves the identity
-**Then** the first `sip-voice:` entry is used as the callback number
+**Given** the caller provides their name and channel information during enrollment
+**When** the agent calls the `link_identity({ name, channels })` tool
+**Then** the plugin loads `openclaw.json`, adds `session.identityLinks[name] = ["sip-voice:<phoneNumber>", ...channels]`, and writes the config back via `api.runtime.config.writeConfigFile()`
 
-**Given** an identity has no `sip-voice:` entry (only Discord, Telegram, etc.)
-**When** the plugin attempts to resolve a callback number
-**Then** the resolution returns `null` and the agent is informed that no SIP callback number is configured for that identity
+**Given** `link_identity` is called while another enrollment is in progress (race condition)
+**When** the config is written
+**Then** the write is serialized — no concurrent writes corrupt the config (mutex or sequential queue)
 
-**Given** the `peerId` passed during an inbound call matches an `identityLinks` entry
-**When** the agent later needs to call back the same user
-**Then** the agent can resolve the user's identity to the callback number without the caller needing to provide their number verbally
+**Given** a caller's phone number IS present in `session.identityLinks`
+**When** the plugin processes the initial query
+**Then** the plugin passes `{ isFirstCall: false, identity: "<canonicalName>" }` so the agent addresses the caller by name
 
-### Story 5.3: Agent Skill Registration (place_call tool + SKILL.md) — FR32
+**Given** the `link_identity` tool call fails (config write error)
+**When** the error occurs
+**Then** the plugin logs at ERROR level and returns an error to the agent; the call continues normally without enrollment persisted
 
-As an OpenClaw agent (Morpheus, Cephanie),
-I want a `place_call` tool registered by the plugin and a `SKILL.md` loaded into my context,
-So that I know when and how to initiate an outbound call autonomously.
+### Story 5.3: Dynamic Greeting & Call Continuity — FR34, FR35
+
+As a caller,
+I want the agent to greet me personally and pick up our last conversation,
+So that every call feels like a continuation of an ongoing relationship rather than starting from scratch.
 
 **Design notes:**
-- Plugin registers `api.registerTool('place_call', ...)` — gives agents the capability
+- The hardcoded greeting `"Hello! I'm your server. How can I help you today?"` in `conversation-loop.js` is replaced with an initial bridge query
+- Hold music plays during the initial query (same `loopHoldMusic()` pattern from Story 4.3) — 2–4 seconds, no dead air
+- The initial query passes caller identity context so the agent can personalize the greeting
+- OpenClaw's session persistence handles the "last conversation" memory — the agent already has history; the initial query just gives it permission to use it
+- `skipGreeting` flag is reused: `skipGreeting: false` (inbound) triggers the initial query; `skipGreeting: true` (outbound conversation mode) remains unchanged
+
+**Acceptance Criteria:**
+
+**Given** an inbound call arrives and the call is answered
+**When** `runConversationLoop()` starts with `skipGreeting: false`
+**Then** hold music starts immediately and an initial bridge query is sent with caller identity context (`{ isFirstCall, identity, peerId }`)
+
+**Given** the initial bridge query is sent
+**When** the agent responds with a greeting
+**Then** hold music stops and the TTS-rendered greeting plays to the caller — the agent's voice, the agent's words
+
+**Given** the caller is known (present in `identityLinks`) and has prior conversation history
+**When** the agent generates the greeting
+**Then** the agent addresses the caller by their canonical name and references relevant context from the last conversation if appropriate
+
+**Given** the caller is unknown (not in `identityLinks`)
+**When** the agent generates the greeting
+**Then** the agent introduces itself and begins enrollment (connects to Story 5.2 flow)
+
+**Given** the initial bridge query fails (connection error, 503)
+**When** the error is detected
+**Then** the voice-app falls back to a configurable static greeting (new env var: `FALLBACK_GREETING`) and continues the call normally — no call dropped
+
+**Given** outbound calls with `skipGreeting: true`
+**When** `runConversationLoop()` starts
+**Then** behavior is unchanged — no initial query, `initialContext` prime used instead (brownfield preserved)
+
+### Story 5.4: Agent Tools & SKILL.md — FR32, FR36
+
+As an OpenClaw agent (Morpheus, Cephanie),
+I want `place_call` and `link_identity` tools registered by the plugin and a `SKILL.md` loaded into my context,
+So that I know when and how to initiate outbound calls and enroll new callers autonomously.
+
+**Design notes:**
+- Plugin registers `api.registerTool('place_call', ...)` — gives agents outbound call capability
+- Plugin registers `api.registerTool('link_identity', ...)` — gives agents enrollment capability
 - `SKILL.md` loaded via `"skills": ["./skills"]` in `openclaw.plugin.json` — gives agents the instructions
-- `SKILL.md` must clearly explain both modes so agents don't assume voice is announce-only:
-  - **`announce`**: Speak like you'd leave a voicemail — one clear thought, then let the channel carry the rest
-  - **`conversation`**: Two-way, interactive — use when the user needs to give instructions, ask questions, or make decisions in real time
+- `SKILL.md` covers three behaviors: outbound calling (both modes), identity enrollment, and call continuity
 
 **Acceptance Criteria:**
 
 **Given** the plugin is loaded by the OpenClaw gateway
 **When** an agent's context is initialized
-**Then** the `place_call` tool is available to the agent and the `SKILL.md` instructions are loaded into the agent's context
-
-**Given** a user says "call me when this task is done"
-**When** the task completes
-**Then** the agent posts the full result to the primary channel first, then calls with a brief summary (e.g. "Your deployment finished. Check Discord for details.")
+**Then** both `place_call` and `link_identity` tools are available and `SKILL.md` is loaded
 
 **Given** the agent calls `place_call` with `{ to, device, message, mode }`
 **When** the tool executes
 **Then** it POSTs to `POST /api/outbound-call` on the voice-app and returns `{ callId, status }` to the agent
 
-**Given** the voice-app is unreachable
-**When** the agent calls `place_call`
+**Given** the agent calls `link_identity` with `{ name, channels }`
+**When** the tool executes
+**Then** the plugin writes `session.identityLinks[name]` to `openclaw.json` and returns `{ ok: true, identity: name }`
+
+**Given** the voice-app is unreachable when `place_call` is invoked
+**When** the HTTP request fails
 **Then** the tool returns an error and the agent falls back to delivering the update via the primary channel only
 
-### Story 5.4: Cross-Channel Response Delivery — FR33
+**Given** a user says "call me when this task is done"
+**When** the task completes
+**Then** the agent posts the full result to the primary channel first, then calls with a brief summary
+
+**Given** `SKILL.md` is loaded into the agent's context
+**When** the agent encounters an unenrolled first-time caller
+**Then** the agent follows the enrollment instructions: ask for name, ask for channels, call `link_identity`
+
+### Story 5.5: Identity Resolution for Outbound Callbacks — FR20, FR30
+
+As an operator,
+I want agents to resolve a caller's identity to a callback phone number automatically,
+So that an agent can call someone back using only their canonical name — no phone number needed.
+
+**Acceptance Criteria:**
+
+**Given** the plugin config contains `identityLinks: { "operator": ["sip-voice:+15551234567"] }` (plugin-scoped, for outbound resolution)
+**When** the plugin starts
+**Then** the identity links are loaded and available for callback lookup, and the plugin logs `[sip-voice] loaded 1 identity link(s)`
+
+**Given** an OpenClaw agent needs to call back user "operator"
+**When** the plugin resolves the identity "operator" via identityLinks
+**Then** the plugin extracts the phone number `+15551234567` from the `sip-voice:` prefixed entry
+
+**Given** an identity has no `sip-voice:` entry
+**When** the plugin attempts to resolve a callback number
+**Then** the resolution returns `null` and the agent is informed that no SIP callback number is configured for that identity
+
+**Given** the `peerId` passed during an inbound call was dynamically enrolled via Story 5.2
+**When** the agent later needs to call back the same caller
+**Then** the agent can resolve their callback number from `session.identityLinks` without the caller needing to provide it verbally
+
+### Story 5.6: Cross-Channel Response Delivery — FR33
 
 As an OpenClaw agent,
 I want to detect when my response is too long or complex for voice,
