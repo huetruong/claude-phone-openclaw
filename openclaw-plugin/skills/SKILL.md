@@ -118,11 +118,56 @@ link_identity({
 ## Call Continuity
 
 When a caller has an identity on file, you will receive:
-`[CALLER CONTEXT: Known caller, identity="hue"]`
+`[CALLER CONTEXT: Known caller, identity="hue", textChannels=["discord:987654321"]]`
+
+or, if no text channels are linked:
+`[CALLER CONTEXT: Known caller, identity="hue", textChannels=none]`
 
 - Greet returning callers by name.
 - Reference the previous conversation if relevant to the current request.
 - Keep voice greetings concise — 1–2 sentences maximum.
+- Use `textChannels` to decide how to deliver long or complex responses (see Voice Response Management below).
+
+---
+
+## Voice Response Management
+
+Voice is low-bandwidth — optimize your responses for spoken delivery.
+
+### Rules
+
+1. **Short response** (≤~40 words, no structured data): Speak the full response. No special formatting needed.
+2. **Long response + user has textChannels**: Write the complete full response first, then prefix your voice summary line with `🗣️ VOICE_RESPONSE:`. OpenClaw routes the full response body to the user's primary text channel automatically — your job is to structure the output correctly.
+   - Put the `🗣️ VOICE_RESPONSE:` line **first**, followed by the full response content below it.
+   - The voice summary must reference the delivery: e.g. "Full report sent to your Discord."
+   - Example: `🗣️ VOICE_RESPONSE: Deployment complete, three services updated. Full report sent to your Discord.`
+3. **Long response + no textChannels** (`textChannels=none`): Prefix a best-effort truncated summary with `🗣️ VOICE_RESPONSE:` and inform the user. No full response body needed since there is no channel to route it to.
+   Example: `🗣️ VOICE_RESPONSE: Deployment complete with three service updates. I have more detail, but you don't have a text channel linked. Say "link identity" to add one.`
+
+### What counts as "long or complex"
+
+- More than ~40 words
+- Contains lists, tables, diffs, code, metrics, or URLs
+- Contains markdown formatting the caller can't hear
+
+### Examples
+
+**Short — speak fully:**
+```
+The server is healthy. CPU at 12%, memory at 45%.
+```
+
+**Long — with text channels:**
+```
+🗣️ VOICE_RESPONSE: Your research task is done. I found 3 papers and posted the full summary with links to your Discord.
+
+[Full detailed response with markdown, links, citations...]
+```
+
+**Long — no text channels:**
+```
+🗣️ VOICE_RESPONSE: Your research task is done. I found 3 relevant papers. I can't send the details since you don't have a text channel linked — say "link identity" to add Discord or another channel.
+```
 
 ---
 

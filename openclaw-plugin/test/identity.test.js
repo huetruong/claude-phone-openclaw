@@ -346,6 +346,67 @@ test('identity - resolveCallbackNumber: empty/missing identityLinks returns null
   assert.strictEqual(resolveCallbackNumber({ identityLinks: {} }, { session: { identityLinks: {} } }, 'operator'), null);
 });
 
+// ── resolveUserChannels ────────────────────────────────────────────────────────
+
+test('identity - resolveUserChannels (4.1): identity with discord and telegram channels returns both from plugin config', () => {
+  const { resolveUserChannels } = requireIdentity();
+  const pluginConfig = { identityLinks: { hue: ['sip-voice:15551234567', 'discord:987654321', 'telegram:@hue'] } };
+  const result = resolveUserChannels(pluginConfig, {}, 'hue');
+  assert.deepStrictEqual(result, ['discord:987654321', 'telegram:@hue']);
+});
+
+test('identity - resolveUserChannels (4.2): identity with discord channel in session config (dynamic enrollment) returns it', () => {
+  const { resolveUserChannels } = requireIdentity();
+  const ocConfig = { session: { identityLinks: { hue: ['sip-voice:15551234567', 'discord:987654321'] } } };
+  const result = resolveUserChannels({}, ocConfig, 'hue');
+  assert.deepStrictEqual(result, ['discord:987654321']);
+});
+
+test('identity - resolveUserChannels (4.3): plugin config channels take precedence — session config channels are ignored', () => {
+  const { resolveUserChannels } = requireIdentity();
+  const pluginConfig = { identityLinks: { hue: ['sip-voice:15551234567', 'discord:plugin-channel'] } };
+  const ocConfig = { session: { identityLinks: { hue: ['sip-voice:15551234567', 'discord:session-channel'] } } };
+  const result = resolveUserChannels(pluginConfig, ocConfig, 'hue');
+  assert.deepStrictEqual(result, ['discord:plugin-channel']);
+});
+
+test('identity - resolveUserChannels (4.4): identity with only sip-voice entries returns empty array', () => {
+  const { resolveUserChannels } = requireIdentity();
+  const pluginConfig = { identityLinks: { hue: ['sip-voice:15551234567'] } };
+  const result = resolveUserChannels(pluginConfig, {}, 'hue');
+  assert.deepStrictEqual(result, []);
+});
+
+test('identity - resolveUserChannels (4.5): unknown identity returns empty array', () => {
+  const { resolveUserChannels } = requireIdentity();
+  const pluginConfig = { identityLinks: { hue: ['sip-voice:15551234567', 'discord:987654321'] } };
+  const result = resolveUserChannels(pluginConfig, {}, 'alice');
+  assert.deepStrictEqual(result, []);
+});
+
+test('identity - resolveUserChannels (4.6): empty/missing identityLinks returns empty array', () => {
+  const { resolveUserChannels } = requireIdentity();
+  assert.deepStrictEqual(resolveUserChannels(null, null, 'hue'), []);
+  assert.deepStrictEqual(resolveUserChannels({}, {}, 'hue'), []);
+  assert.deepStrictEqual(resolveUserChannels({ identityLinks: {} }, { session: { identityLinks: {} } }, 'hue'), []);
+});
+
+test('identity - resolveUserChannels (4.7): mixed sip-voice and non-sip-voice entries — only non-sip-voice returned', () => {
+  const { resolveUserChannels } = requireIdentity();
+  const pluginConfig = { identityLinks: { hue: ['sip-voice:15551234567', 'discord:987654321', 'sip-voice:15559999999', 'telegram:@hue'] } };
+  const result = resolveUserChannels(pluginConfig, {}, 'hue');
+  assert.deepStrictEqual(result, ['discord:987654321', 'telegram:@hue']);
+});
+
+test('identity - resolveUserChannels (4.8): SIP-only plugin config falls through to session config for text channels', () => {
+  const { resolveUserChannels } = requireIdentity();
+  // Production scenario: operator configured phone in plugin config; user enrolled Discord via link_identity (session config)
+  const pluginConfig = { identityLinks: { hue: ['sip-voice:15551234567'] } };
+  const ocConfig = { session: { identityLinks: { hue: ['sip-voice:15551234567', 'discord:987654321'] } } };
+  const result = resolveUserChannels(pluginConfig, ocConfig, 'hue');
+  assert.deepStrictEqual(result, ['discord:987654321']);
+});
+
 test('identity - link_identity: concurrent enrollments are serialized by mutex', async () => {
   const { createLinkIdentityHandler } = requireIdentity();
 
