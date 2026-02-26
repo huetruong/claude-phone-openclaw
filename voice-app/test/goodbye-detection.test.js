@@ -48,7 +48,8 @@ describe('isGoodbye()', () => {
     const normalPhrases = [
       'hello',
       'what is the weather',
-      'byebye',          // not an exact "bye" boundary match
+      'byebye',              // bare compound word — no leading space
+      'I said byebye',       // compound word with leading space — false positive guard
       'can you help me',
       'tell me about your day',
       '',

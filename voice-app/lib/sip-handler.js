@@ -140,7 +140,7 @@ async function handleInvite(req, res, options) {
     // After conversation ends gracefully (e.g. goodbye), send BYE
     try { dialog.destroy(); } catch (e) {}
 
-    return { endpoint: endpoint, dialog: dialog, callerId: callerId, callUuid: callUuid };
+    return { endpoint: endpoint, dialog: dialog, callUuid: callUuid };
 
   } catch (error) {
     console.error('[' + new Date().toISOString() + '] CALL Error:', error.message);

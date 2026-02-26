@@ -62,8 +62,8 @@ function isGoodbye(transcript) {
   const lower = transcript.toLowerCase().trim();
   const goodbyePhrases = ['goodbye', 'good bye', 'bye', 'hang up', 'end call', "that's all", 'thats all'];
   return goodbyePhrases.some(phrase => {
-    return lower === phrase || lower.includes(` ${phrase}`) ||
-           lower.startsWith(`${phrase} `) || lower.endsWith(` ${phrase}`);
+    const escaped = phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return new RegExp('(?:^|\\s)' + escaped + '(?:\\s|$)').test(lower);
   });
 }
 

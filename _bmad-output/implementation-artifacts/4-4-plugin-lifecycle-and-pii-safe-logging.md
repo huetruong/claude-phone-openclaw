@@ -1,6 +1,6 @@
 # Story 4.4: Plugin Lifecycle & PII-Safe Logging
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -51,7 +51,7 @@ so that I can maintain the system without coordinated restarts and without leaki
   - [x] 5.1 Unit test: voice-app sip-handler PII — callerId/peerId never appears in INFO/WARN/ERROR console output
   - [x] 5.2 Unit test: plugin lifecycle — service stop is graceful (server.close called, _server nulled)
   - [x] 5.3 Unit test: goodbye detection — `isGoodbye()` returns true for all expected phrases and false for non-goodbye
-  - [x] 5.4 Unit test: bridge `isAvailable()` returns false when plugin is down, true when back up
+  - [x] 5.4 Unit test: bridge `isAvailable()` returns false when plugin is down, true when back up — verified via pre-existing tests in `voice-app/test/openclaw-bridge.test.js` (4 tests at lines 242–278, unchanged by this story)
   - [x] 5.5 Verify all existing tests pass (265 tests: 107 CLI + 71 voice-app + 87 plugin)
 
 - [x] Task 6: Update documentation (AC: all)
@@ -74,8 +74,8 @@ This logs the full E.164 phone number (e.g., `+15551234567`) directly to console
 ```js
 // DEBUG only — includes PII
 logger.debug('Incoming call details', { peerId: callerId, extension: dialedExt || 'unknown' });
-// INFO — no PII
-logger.info('Incoming call', { extension: dialedExt || 'unknown', callUuid });
+// INFO — no PII (callUuid not available here; it is obtained later after connectCaller)
+logger.info('Incoming call', { extension: dialedExt || 'unknown' });
 ```
 
 Use the structured `logger` module (`voice-app/lib/logger.js`) instead of raw `console.log` for consistency.
@@ -116,6 +116,10 @@ When detected (line 369):
 3. Finally block (line 515) calls `claudeBridge.endSession(callUuid)`
 4. Plugin removes session mapping from store
 5. Dialog is destroyed in `sip-handler.js:123`
+
+### Tech Debt: Brownfield `console.log` Calls in sip-handler.js
+
+`sip-handler.js` lines 81, 83, 114, 121, 125 still use raw `console.log` (device match, SDP strip, call connected, call ended, error). None contain PII. Migration to structured `logger.*` is deferred as brownfield cleanup — not in scope for this story but should be tracked for a future logging-consistency pass.
 
 ### Logging Architecture Overview
 
@@ -197,13 +201,15 @@ claude-sonnet-4-6
 - Goodbye detection verified: `isGoodbye()` covers all 7 standard phrases; finally block calls `endSession()` correctly.
 - Plugin `POST /voice/end-session` verified: removes session mapping only, does not touch agent workspace.
 - TROUBLESHOOTING.md: plugin restart recovery already covered under "agent is currently unavailable" section. No log examples showed phone numbers at INFO+. No doc changes needed.
-- Test results: 107 CLI + 110 voice-app + 88 plugin = **305 total tests**, all passing (was 265; added 40 new tests). Linting: 0 errors, 10 pre-existing warnings.
+- Test results: 107 CLI + 111 voice-app + 88 plugin = **306 total tests**, all passing (was 265; added 41 new tests). Linting: 0 errors, 10 pre-existing warnings.
+- Review fixes (adversarial code review): Fixed `isGoodbye()` word-boundary false positive — replaced substring check with `(?:^|\s)phrase(?:\s|$)` regex; added compound-word false positive guard test (`'I said byebye'`). Removed `callerId` from `handleInvite()` return object (latent PII risk). Corrected Dev Notes "Fix pattern" (removed erroneous `callUuid` reference). Added brownfield `console.log` tech debt note. Clarified Task 5.4 as verified via pre-existing tests.
 
 ### File List
 
-- `voice-app/lib/sip-handler.js` — Fixed PII leak: replaced `console.log` with `logger.debug` (peerId) + `logger.info` (extension only)
+- `voice-app/lib/sip-handler.js` — Fixed PII leak: replaced `console.log` with `logger.debug` (peerId) + `logger.info` (extension only); removed `callerId` from return object (latent PII risk)
+- `voice-app/lib/conversation-loop.js` — Fixed `isGoodbye()` word-boundary false positive: replaced substring check with `(?:^|\s)phrase(?:\s|$)` regex
 - `voice-app/test/pii-logging.test.js` — New: 4 tests verifying callerId absent from INFO/WARN/ERROR, present at DEBUG
-- `voice-app/test/goodbye-detection.test.js` — New: 35 tests for `isGoodbye()` (all 7 phrases × 4 variants + 7 negative cases)
+- `voice-app/test/goodbye-detection.test.js` — New: 36 tests for `isGoodbye()` (all 7 phrases × 4 variants + 8 negative cases including compound-word guard)
 - `openclaw-plugin/test/index.test.js` — Added 1 test: service.stop() after start() calls server.close() and is idempotent
 - `_bmad-output/implementation-artifacts/sprint-status.yaml` — Status: in-progress → review
 - `_bmad-output/implementation-artifacts/4-4-plugin-lifecycle-and-pii-safe-logging.md` — Story file updated
@@ -211,3 +217,4 @@ claude-sonnet-4-6
 ## Change Log
 
 - 2026-02-25: Fixed PII leak in `sip-handler.js` — moved caller phone number log from INFO to DEBUG, added PII-safe INFO log (extension only). Added 40 new tests for PII safety, goodbye detection, and plugin lifecycle. All 305 tests passing.
+- 2026-02-25: Adversarial review fixes — (1) Fixed `isGoodbye()` word-boundary false positive using `(?:^|\s)phrase(?:\s|$)` regex; added compound-word guard test `'I said byebye'`. (2) Removed `callerId` from `handleInvite()` return object. (3) Corrected Dev Notes fix pattern (removed erroneous `callUuid`). (4) Documented brownfield `console.log` tech debt. (5) Clarified Task 5.4 as verified via pre-existing tests.

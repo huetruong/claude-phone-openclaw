@@ -63,7 +63,7 @@ development_status:
   4-1-independent-session-lifecycle: done
   4-2-in-flight-query-abort-on-hangup: done
   4-3-hold-music-and-unavailability-message: done
-  4-4-plugin-lifecycle-and-pii-safe-logging: review
+  4-4-plugin-lifecycle-and-pii-safe-logging: done
   epic-4-retrospective: optional
 
   epic-5: backlog
