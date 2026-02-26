@@ -316,5 +316,60 @@ test('index - register() still calls api.registerService() exactly once alongsid
   const api = createMockApi({ accounts: [], bindings: [] });
   plugin.register(api);
   assert.strictEqual(api._calls.registerService.length, 1, 'registerService must still be called once');
-  assert.strictEqual(api._calls.registerTool.length, 1, 'registerTool must be called once for link_identity');
+  assert.strictEqual(api._calls.registerTool.length, 2, 'registerTool must be called twice (link_identity + place_call)');
+});
+
+// ---------------------------------------------------------------------------
+// place_call tool registration (Story 5.4)
+// ---------------------------------------------------------------------------
+
+test('index - register() calls api.registerTool() with place_call', () => {
+  const plugin = requireIndex();
+  const api = createMockApi({ accounts: [], bindings: [] });
+  plugin.register(api);
+  const toolNames = api._calls.registerTool.map(t => t.name);
+  assert.ok(toolNames.includes('place_call'), 'Must register place_call tool');
+});
+
+test('index - place_call tool has schema with required to, device, and message', () => {
+  const plugin = requireIndex();
+  const api = createMockApi({ accounts: [], bindings: [] });
+  plugin.register(api);
+  const tool = api._calls.registerTool.find(t => t.name === 'place_call');
+  assert.ok(tool, 'place_call tool must be registered');
+  assert.ok(tool.schema, 'tool must have a schema');
+  assert.ok(Array.isArray(tool.schema.required), 'schema.required must be an array');
+  assert.ok(tool.schema.required.includes('to'), 'schema must require to');
+  assert.ok(tool.schema.required.includes('device'), 'schema must require device');
+  assert.ok(tool.schema.required.includes('message'), 'schema must require message');
+});
+
+test('index - place_call tool has an async handler function', () => {
+  const plugin = requireIndex();
+  const api = createMockApi({ accounts: [], bindings: [] });
+  plugin.register(api);
+  const tool = api._calls.registerTool.find(t => t.name === 'place_call');
+  assert.ok(tool, 'place_call tool must be registered');
+  assert.strictEqual(typeof tool.handler, 'function', 'tool must have a handler function');
+});
+
+test('index - register() calls api.registerTool() exactly 2 times (link_identity + place_call)', () => {
+  const plugin = requireIndex();
+  const api = createMockApi({ accounts: [], bindings: [] });
+  plugin.register(api);
+  assert.strictEqual(api._calls.registerTool.length, 2, 'registerTool must be called exactly twice');
+  const toolNames = api._calls.registerTool.map(t => t.name);
+  assert.ok(toolNames.includes('link_identity'), 'Must include link_identity');
+  assert.ok(toolNames.includes('place_call'), 'Must include place_call');
+});
+
+// ---------------------------------------------------------------------------
+// SKILL.md manifest verification (Story 5.4, Task 5.3)
+// ---------------------------------------------------------------------------
+
+test('manifest - openclaw.plugin.json contains skills field pointing to ./skills', () => {
+  const manifest = require('../openclaw.plugin.json');
+  assert.ok(manifest.skills, 'manifest must have a skills field');
+  assert.ok(Array.isArray(manifest.skills), 'skills field must be an array');
+  assert.ok(manifest.skills.includes('./skills'), 'skills must include ./skills');
 });

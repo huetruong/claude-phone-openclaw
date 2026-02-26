@@ -79,7 +79,6 @@ const plugin = {
     }
 
     // Internal function: place an outbound call via the voice-app REST API.
-    // Prepared for Story 5.4's place_call agent tool — not yet exposed as a tool.
     plugin.placeCall = (params) => outboundClient.placeCall({ voiceAppUrl, ...params });
 
     // Register link_identity agent tool — allows agents to enroll new callers
@@ -100,6 +99,36 @@ const plugin = {
         required: ['name', 'peerId'],
       },
       handler: createLinkIdentityHandler(api),
+    });
+
+    // Register place_call agent tool — allows agents to initiate outbound calls
+    // via the voice-app REST API.
+    api.registerTool({
+      name: 'place_call',
+      schema: {
+        type: 'object',
+        properties: {
+          to: { type: 'string', description: 'Destination phone number (E.164) or extension' },
+          device: { type: 'string', description: 'Extension/device name to call from (e.g., "9000")' },
+          message: { type: 'string', description: 'TTS message to play when call is answered (max 1000 chars)' },
+          mode: {
+            type: 'string',
+            enum: ['announce', 'conversation'],
+            description: 'Call mode: "announce" (one-way, default) or "conversation" (two-way)',
+          },
+        },
+        required: ['to', 'device', 'message'],
+      },
+      handler: async ({ to, device, message, mode }) => {
+        logger.info('place_call tool invoked', { device });
+        const result = await outboundClient.placeCall({ voiceAppUrl, to, device, message, mode });
+        if (result.error) {
+          logger.warn('place_call failed', { error: result.error });
+        } else {
+          logger.info('place_call succeeded', { callId: result.callId });
+        }
+        return result;
+      },
     });
 
     // Reap stale sessions from prior gateway runs (OpenClaw bug #3290).
