@@ -92,4 +92,38 @@ function createLinkIdentityHandler(api) {
   };
 }
 
-module.exports = { resolveIdentity, createLinkIdentityHandler };
+/**
+ * Resolve an identity name to a callback phone number for outbound calls.
+ * Checks plugin config first (operator-defined), then session config (dynamic enrollment).
+ * @param {object} pluginConfig - Plugin config (api.pluginConfig)
+ * @param {object} ocConfig - Full OpenClaw config (for session.identityLinks)
+ * @param {string} identityName - Canonical identity name (e.g., "operator", "hue")
+ * @returns {string|null} Phone number (e.g., "+15551234567") or null if not found
+ */
+function resolveCallbackNumber(pluginConfig, ocConfig, identityName) {
+  // Check plugin config first (operator-defined takes precedence)
+  const pluginLinks = (pluginConfig && pluginConfig.identityLinks) || {};
+  const pluginChannels = pluginLinks[identityName];
+  if (Array.isArray(pluginChannels)) {
+    for (const ch of pluginChannels) {
+      if (ch.startsWith('sip-voice:')) {
+        return ch.slice('sip-voice:'.length);
+      }
+    }
+  }
+
+  // Fall back to session config (dynamically enrolled)
+  const sessionLinks = (ocConfig && ocConfig.session && ocConfig.session.identityLinks) || {};
+  const sessionChannels = sessionLinks[identityName];
+  if (Array.isArray(sessionChannels)) {
+    for (const ch of sessionChannels) {
+      if (ch.startsWith('sip-voice:')) {
+        return ch.slice('sip-voice:'.length);
+      }
+    }
+  }
+
+  return null;
+}
+
+module.exports = { resolveIdentity, createLinkIdentityHandler, resolveCallbackNumber };

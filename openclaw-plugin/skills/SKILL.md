@@ -13,7 +13,7 @@ Initiates an outbound phone call via the voice-app.
 
 | Parameter | Type   | Required | Description |
 |-----------|--------|----------|-------------|
-| `to`      | string | yes      | Destination phone number (E.164, e.g. `+15551234567`) or extension (e.g. `9001`) |
+| `to`      | string | yes      | Destination: phone number (E.164, e.g. `+15551234567`), extension (e.g. `9001`), or identity name (e.g. `"operator"`) |
 | `device`  | string | yes      | Your extension to call from (e.g. `"9000"`) |
 | `message` | string | yes      | Voice message to deliver (TTS, max 1000 chars). Keep it concise — under 50 words is ideal for voice. |
 | `mode`    | string | no       | `"announce"` (default) or `"conversation"` |
@@ -39,11 +39,19 @@ On failure: `{ error: string }`
 ### Example usage
 
 ```
-// Task completion callback
+// Task completion callback — by phone number
 place_call({
   to: "+15551234567",
   device: "9000",
   message: "Your research task is done. I found 3 relevant papers and posted the summary to chat.",
+  mode: "announce"
+})
+
+// Task completion callback — by identity name (resolves to configured phone number)
+place_call({
+  to: "operator",
+  device: "9000",
+  message: "Your research task is done. Summary posted to chat.",
   mode: "announce"
 })
 

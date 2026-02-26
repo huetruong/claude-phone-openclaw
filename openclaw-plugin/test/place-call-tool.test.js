@@ -162,3 +162,89 @@ test('place_call - handler works when mode is omitted (passes undefined, outboun
   assert.strictEqual(lastPlaceCallArgs.mode, undefined, 'mode should be undefined when not provided');
   assert.deepStrictEqual(result, { callId: 'test-no-mode', status: 'initiated' });
 });
+
+// ---------------------------------------------------------------------------
+// place_call handler — identity name resolution
+// ---------------------------------------------------------------------------
+
+test('place_call - identity name in plugin config resolves to phone number', async () => {
+  lastPlaceCallArgs = null;
+  mockPlaceCallResult = { callId: 'id-call-1', status: 'initiated' };
+
+  const plugin = requireIndex();
+  const api = createMockApi({
+    voiceAppUrl: 'http://voice-app:3000',
+    accounts: [],
+    bindings: [],
+    identityLinks: { operator: ['sip-voice:+15551234567'] },
+  });
+  plugin.register(api);
+  const tool = getPlaceCallTool(api);
+
+  const result = await tool.handler({ to: 'operator', device: '9000', message: 'Task done' });
+
+  assert.ok(lastPlaceCallArgs, 'outboundClient.placeCall must be called');
+  assert.strictEqual(lastPlaceCallArgs.to, '+15551234567', 'must resolve identity to phone number');
+  assert.deepStrictEqual(result, { callId: 'id-call-1', status: 'initiated' });
+});
+
+test('place_call - identity name not found returns error without calling outboundClient', async () => {
+  lastPlaceCallArgs = null;
+  mockPlaceCallResult = { callId: 'should-not-reach', status: 'initiated' };
+
+  const plugin = requireIndex();
+  const api = createMockApi({ voiceAppUrl: 'http://voice-app:3000', accounts: [], bindings: [] });
+  plugin.register(api);
+  const tool = getPlaceCallTool(api);
+
+  const result = await tool.handler({ to: 'unknown', device: '9000', message: 'Test' });
+
+  assert.strictEqual(lastPlaceCallArgs, null, 'outboundClient.placeCall must NOT be called');
+  assert.ok(result.error, 'must return error');
+  assert.ok(result.error.includes('unknown'), 'error must name the identity');
+});
+
+test('place_call - to as phone number (+15551234567) passes through unchanged', async () => {
+  lastPlaceCallArgs = null;
+  mockPlaceCallResult = { callId: 'phone-call', status: 'initiated' };
+
+  const plugin = requireIndex();
+  const api = createMockApi({ voiceAppUrl: 'http://voice-app:3000', accounts: [], bindings: [] });
+  plugin.register(api);
+  const tool = getPlaceCallTool(api);
+
+  await tool.handler({ to: '+15551234567', device: '9000', message: 'Hi' });
+
+  assert.strictEqual(lastPlaceCallArgs.to, '+15551234567', 'phone number must pass through unchanged');
+});
+
+test('place_call - to as extension (9001) passes through unchanged', async () => {
+  lastPlaceCallArgs = null;
+  mockPlaceCallResult = { callId: 'ext-call', status: 'initiated' };
+
+  const plugin = requireIndex();
+  const api = createMockApi({ voiceAppUrl: 'http://voice-app:3000', accounts: [], bindings: [] });
+  plugin.register(api);
+  const tool = getPlaceCallTool(api);
+
+  await tool.handler({ to: '9001', device: '9000', message: 'Hi' });
+
+  assert.strictEqual(lastPlaceCallArgs.to, '9001', 'extension must pass through unchanged');
+});
+
+test('place_call - identity name in session config resolves to phone number', async () => {
+  lastPlaceCallArgs = null;
+  mockPlaceCallResult = { callId: 'session-id-call', status: 'initiated' };
+
+  const plugin = requireIndex();
+  const api = createMockApi({ voiceAppUrl: 'http://voice-app:3000', accounts: [], bindings: [] });
+  api.config = { session: { identityLinks: { hue: ['sip-voice:+15559876543'] } } };
+  plugin.register(api);
+  const tool = getPlaceCallTool(api);
+
+  const result = await tool.handler({ to: 'hue', device: '9000', message: 'Task done' });
+
+  assert.ok(lastPlaceCallArgs, 'outboundClient.placeCall must be called');
+  assert.strictEqual(lastPlaceCallArgs.to, '+15559876543', 'must resolve identity from session config');
+  assert.deepStrictEqual(result, { callId: 'session-id-call', status: 'initiated' });
+});

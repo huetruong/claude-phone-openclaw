@@ -9,7 +9,7 @@ const logger = require('./logger');
 const sessionStore = require('./session-store');
 const { createServer, startServer } = require('./webhook-server');
 const outboundClient = require('./outbound-client');
-const { resolveIdentity, createLinkIdentityHandler } = require('./identity');
+const { resolveIdentity, createLinkIdentityHandler, resolveCallbackNumber } = require('./identity');
 
 // ---------------------------------------------------------------------------
 // extensionAPI loader
@@ -92,6 +92,12 @@ const plugin = {
       logger.warn('voiceAppUrl not configured — outbound calls will fail until set in plugin config');
     }
 
+    const pluginLinks = config.identityLinks || {};
+    const linkCount = Object.keys(pluginLinks).length;
+    if (linkCount > 0) {
+      logger.info(`[sip-voice] loaded ${linkCount} identity link(s)`);
+    }
+
     // Register link_identity agent tool — allows agents to enroll new callers
     // by linking their phone number to a canonical identity in openclaw.json.
     api.registerTool({
@@ -132,8 +138,24 @@ const plugin = {
       },
       handler: async ({ to, device, message, mode }) => {
         logger.info('place_call tool invoked', { device });
-        logger.debug('place_call destination', { to });
-        const result = await outboundClient.placeCall({ voiceAppUrl, to, device, message, mode });
+
+        // Resolve identity name to phone number if 'to' is not already a phone/extension.
+        // Identity name: does not start with '+', is not all digits.
+        let resolvedTo = to;
+        if (to && !to.startsWith('+') && !/^\d+$/.test(to)) {
+          const phone = resolveCallbackNumber(config, api.config, to);
+          if (phone) {
+            logger.info('[sip-voice] identity resolved for callback', { identity: to });
+            logger.debug('[sip-voice] resolved phone', { phone });
+            resolvedTo = phone;
+          } else {
+            logger.warn('[sip-voice] no SIP callback number for identity', { identity: to });
+            return { error: `no SIP callback number configured for identity '${to}'` };
+          }
+        }
+
+        logger.debug('place_call destination', { to: resolvedTo });
+        const result = await outboundClient.placeCall({ voiceAppUrl, to: resolvedTo, device, message, mode });
         if (result.error) {
           logger.warn('place_call failed', { error: result.error });
         } else {
