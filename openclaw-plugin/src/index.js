@@ -9,7 +9,7 @@ const logger = require('./logger');
 const sessionStore = require('./session-store');
 const { createServer, startServer } = require('./webhook-server');
 const outboundClient = require('./outbound-client');
-const { resolveIdentity, createLinkIdentityHandler, resolveCallbackNumber } = require('./identity');
+const { resolveIdentity, createLinkIdentityHandler, resolveCallbackNumber, resolveUserChannels } = require('./identity');
 
 // ---------------------------------------------------------------------------
 // extensionAPI loader
@@ -196,6 +196,16 @@ const plugin = {
       const ext = await getExtensionAPI();
       const ocConfig = api.config;
 
+      const suffix = resolveSessionSuffix(identityContext, peerId, sessionId);
+
+      // Resolve text channels for known callers to inform response medium selection.
+      const userChannels = (identityContext && identityContext.identity)
+        ? resolveUserChannels(config, ocConfig, identityContext.identity)
+        : [];
+      const channelInfo = userChannels.length > 0
+        ? `textChannels=${JSON.stringify(userChannels)}`
+        : 'textChannels=none';
+
       // Prepend caller context so the agent knows whether to run enrollment flow.
       // For first-time callers, include the phone number so the agent can pass it
       // to link_identity — without it, enrollment is impossible.
@@ -203,11 +213,9 @@ const plugin = {
       if (identityContext) {
         const ctxLine = identityContext.isFirstCall
           ? `[CALLER CONTEXT: First-time caller, no identity on file${peerId ? `, phone="${peerId}"` : ''}]`
-          : `[CALLER CONTEXT: Known caller, identity="${identityContext.identity}"]`;
+          : `[CALLER CONTEXT: Known caller, identity="${identityContext.identity}", ${channelInfo}]`;
         enrichedPrompt = ctxLine + '\n' + prompt;
       }
-
-      const suffix = resolveSessionSuffix(identityContext, peerId, sessionId);
       const sessionKey = `sip-voice:${agentId}:${suffix}`;
       const storePath = path.dirname(ext.resolveStorePath(ocConfig?.session?.store));
       const agentDir = ext.resolveAgentDir(ocConfig, agentId);

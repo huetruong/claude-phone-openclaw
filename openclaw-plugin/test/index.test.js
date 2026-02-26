@@ -487,7 +487,7 @@ test('index - resolveSessionSuffix: empty string identity falls through to peerI
  * - Injects a mock extensionAPI to avoid ESM dynamic import of openclaw internals
  * - Returns { capturedQueryAgent, runCalls, service, cleanup }
  */
-async function setupQueryAgentEnv() {
+async function setupQueryAgentEnv(opts = {}) {
   const runCalls = [];
   let capturedQueryAgent = null;
 
@@ -496,7 +496,7 @@ async function setupQueryAgentEnv() {
     filename: require.resolve('../src/webhook-server'),
     loaded: true,
     exports: {
-      createServer: (opts) => { capturedQueryAgent = opts.queryAgent; return { _isMock: true }; },
+      createServer: (serverOpts) => { capturedQueryAgent = serverOpts.queryAgent; return { _isMock: true }; },
       startServer: async () => _mockServerHandle,
     }
   };
@@ -506,12 +506,13 @@ async function setupQueryAgentEnv() {
     resolveAgentDir: (_cfg, agentId) => `/fake/agents/${agentId}`,
     resolveAgentWorkspaceDir: (_cfg, agentId) => `/fake/agents/${agentId}/workspace`,
     ensureAgentWorkspace: async () => {},
-    runEmbeddedPiAgent: async (opts) => { runCalls.push(opts); return { payloads: [{ text: 'ok', isError: false }] }; },
+    runEmbeddedPiAgent: async (runOpts) => { runCalls.push(runOpts); return { payloads: [{ text: 'ok', isError: false }] }; },
   };
 
   const plugin = requireIndex();
   plugin._setExtensionAPIForTest(mockExt);
-  const api = createMockApi({ accounts: [], bindings: [], apiKey: 'test' });
+  const pluginConfig = { accounts: [], bindings: [], apiKey: 'test', ...(opts.pluginConfig || {}) };
+  const api = createMockApi(pluginConfig);
   plugin.register(api);
   const service = api._calls.registerService[0];
   await service.start();
@@ -605,4 +606,63 @@ test('manifest - openclaw.plugin.json contains skills field pointing to ./skills
   assert.ok(manifest.skills, 'manifest must have a skills field');
   assert.ok(Array.isArray(manifest.skills), 'skills field must be an array');
   assert.ok(manifest.skills.includes('./skills'), 'skills must include ./skills');
+});
+
+// ---------------------------------------------------------------------------
+// Channel-enriched caller context integration tests (Story 5.7, Tasks 5.1-5.3)
+// ---------------------------------------------------------------------------
+
+test('index - queryAgent (Task 5.1): known caller with channels includes textChannels in enriched prompt', async () => {
+  const { capturedQueryAgent, runCalls, cleanup } = await setupQueryAgentEnv({
+    pluginConfig: { identityLinks: { hue: ['sip-voice:15551234567', 'discord:987654321'] } },
+  });
+  try {
+    await capturedQueryAgent('morpheus', 'call-uuid-c1', 'hello', '+15551234567', { identity: 'hue', isFirstCall: false });
+    assert.strictEqual(runCalls.length, 1, 'runEmbeddedPiAgent must be called once');
+    const prompt = runCalls[0].prompt;
+    assert.ok(
+      prompt.includes('textChannels=["discord:987654321"]'),
+      `enriched prompt must include textChannels=["discord:987654321"], got: ${prompt}`
+    );
+    assert.ok(
+      prompt.includes('identity="hue"'),
+      `enriched prompt must include identity="hue", got: ${prompt}`
+    );
+  } finally {
+    await cleanup();
+  }
+});
+
+test('index - queryAgent (Task 5.2): known caller with NO channels includes textChannels=none in enriched prompt', async () => {
+  const { capturedQueryAgent, runCalls, cleanup } = await setupQueryAgentEnv({
+    pluginConfig: { identityLinks: { hue: ['sip-voice:15551234567'] } },
+  });
+  try {
+    await capturedQueryAgent('morpheus', 'call-uuid-c2', 'hello', '+15551234567', { identity: 'hue', isFirstCall: false });
+    const prompt = runCalls[0].prompt;
+    assert.ok(
+      prompt.includes('textChannels=none'),
+      `enriched prompt must include textChannels=none when no text channels configured, got: ${prompt}`
+    );
+  } finally {
+    await cleanup();
+  }
+});
+
+test('index - queryAgent (Task 5.3): first-time caller does NOT include textChannels in enriched prompt', async () => {
+  const { capturedQueryAgent, runCalls, cleanup } = await setupQueryAgentEnv();
+  try {
+    await capturedQueryAgent('morpheus', 'call-uuid-c3', 'hello', '+15551234567', { isFirstCall: true, identity: null });
+    const prompt = runCalls[0].prompt;
+    assert.ok(
+      !prompt.includes('textChannels'),
+      `first-time caller enriched prompt must NOT include textChannels, got: ${prompt}`
+    );
+    assert.ok(
+      prompt.includes('First-time caller'),
+      `first-time caller enriched prompt must include "First-time caller", got: ${prompt}`
+    );
+  } finally {
+    await cleanup();
+  }
 });

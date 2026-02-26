@@ -126,4 +126,34 @@ function resolveCallbackNumber(pluginConfig, ocConfig, identityName) {
   return null;
 }
 
-module.exports = { resolveIdentity, createLinkIdentityHandler, resolveCallbackNumber };
+/**
+ * Resolve all non-SIP text channels linked to an identity.
+ * Checks plugin config first (operator-defined), then session config (dynamic enrollment).
+ * @param {object} pluginConfig - Plugin config (api.pluginConfig)
+ * @param {object} ocConfig - Full OpenClaw config (for session.identityLinks)
+ * @param {string} identityName - Canonical identity name (e.g., "hue")
+ * @returns {string[]} Array of channel strings (e.g., ["discord:987654321"]) — empty if none
+ */
+function resolveUserChannels(pluginConfig, ocConfig, identityName) {
+  if (!identityName) return [];
+
+  // Check plugin config first (operator-defined takes precedence)
+  const pluginLinks = (pluginConfig && pluginConfig.identityLinks) || {};
+  const pluginChannels = pluginLinks[identityName];
+  if (Array.isArray(pluginChannels)) {
+    const textChannels = pluginChannels.filter(ch => !ch.startsWith('sip-voice:'));
+    if (textChannels.length > 0) return textChannels;
+  }
+
+  // Fall back to session config (dynamically enrolled)
+  const sessionLinks = (ocConfig && ocConfig.session && ocConfig.session.identityLinks) || {};
+  const sessionChannels = sessionLinks[identityName];
+  if (Array.isArray(sessionChannels)) {
+    const textChannels = sessionChannels.filter(ch => !ch.startsWith('sip-voice:'));
+    if (textChannels.length > 0) return textChannels;
+  }
+
+  return [];
+}
+
+module.exports = { resolveIdentity, createLinkIdentityHandler, resolveCallbackNumber, resolveUserChannels };
