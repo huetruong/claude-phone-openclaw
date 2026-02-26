@@ -18,7 +18,7 @@ Add to `~/.openclaw/openclaw.json` under the plugin config section:
 
 ```yaml
 sip-voice:
-  webhookPort: 3334          # Port for voice-app → plugin webhook (POST /voice/query)
+  webhookPort: 47334         # Port for voice-app → plugin webhook (POST /voice/query)
   apiKey: "your-secret-key"  # Must match OPENCLAW_API_KEY in voice-app .env
   voiceAppUrl: "http://vitalpbx-server:3000/api"  # Voice-app REST API base URL (for outbound calls)
   accounts:
@@ -82,7 +82,7 @@ In `voice-app/.env`, ensure these are set to match the plugin:
 
 ```bash
 BRIDGE_TYPE=openclaw
-OPENCLAW_WEBHOOK_URL=http://openclaw-server:3334
+OPENCLAW_WEBHOOK_URL=http://openclaw-server:47334
 OPENCLAW_API_KEY=your-secret-key  # Must match plugin apiKey
 ```
 
@@ -92,7 +92,7 @@ After restarting OpenClaw gateway:
 
 ```bash
 # Check plugin webhook is listening
-curl http://localhost:3334/voice/health
+curl http://localhost:47334/voice/health
 # Expected: {"ok":true}
 
 # Check voice-app outbound API (from openclaw-gateway)
