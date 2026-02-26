@@ -251,6 +251,55 @@ test('identity - link_identity: config write failure returns { ok: false, error 
   assert.ok(result.error.includes('disk full'), 'error message must include cause');
 });
 
+test('identity - link_identity: config write failure rolls back in-memory identityLinks', async () => {
+  const { createLinkIdentityHandler } = requireIdentity();
+  const api = makeMockApi({ writeError: new Error('disk full') });
+  const handler = createLinkIdentityHandler(api);
+
+  await handler({ name: 'hue', peerId: '+15551234567' });
+
+  // In-memory config must NOT have the enrollment after a failed write (AC 6).
+  const enrolled = api.config.session &&
+    api.config.session.identityLinks &&
+    api.config.session.identityLinks['hue'];
+  assert.strictEqual(enrolled, undefined,
+    'Failed write must not leave enrollment in in-memory config');
+  assert.strictEqual(api._writes.length, 0, 'writeConfigFile must not have completed');
+});
+
+test('identity - link_identity: missing peerId returns { ok: false, error } without writing config', async () => {
+  const { createLinkIdentityHandler } = requireIdentity();
+  const api = makeMockApi();
+  const handler = createLinkIdentityHandler(api);
+
+  const result = await handler({ name: 'hue', peerId: undefined });
+  assert.strictEqual(result.ok, false);
+  assert.ok(result.error, 'must include error message');
+  assert.strictEqual(api._writes.length, 0, 'must not write config when peerId is missing');
+});
+
+test('identity - link_identity: null peerId returns { ok: false, error } without writing config', async () => {
+  const { createLinkIdentityHandler } = requireIdentity();
+  const api = makeMockApi();
+  const handler = createLinkIdentityHandler(api);
+
+  const result = await handler({ name: 'hue', peerId: null });
+  assert.strictEqual(result.ok, false);
+  assert.ok(result.error, 'must include error message');
+  assert.strictEqual(api._writes.length, 0, 'must not write config when peerId is null');
+});
+
+test('identity - link_identity: missing name returns { ok: false, error } without writing config', async () => {
+  const { createLinkIdentityHandler } = requireIdentity();
+  const api = makeMockApi();
+  const handler = createLinkIdentityHandler(api);
+
+  const result = await handler({ name: undefined, peerId: '+15551234567' });
+  assert.strictEqual(result.ok, false);
+  assert.ok(result.error, 'must include error message');
+  assert.strictEqual(api._writes.length, 0, 'must not write config when name is missing');
+});
+
 test('identity - link_identity: concurrent enrollments are serialized by mutex', async () => {
   const { createLinkIdentityHandler } = requireIdentity();
 

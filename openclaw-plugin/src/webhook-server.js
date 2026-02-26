@@ -75,9 +75,15 @@ function createServer(config = {}) {
       }
 
       // Resolve caller identity before routing — default to first-call context.
+      // await handles both sync and async resolvers transparently.
+      // A broken resolver must not abort the call — fall back to first-call context.
       let identityContext = { isFirstCall: true, identity: null };
       if (resolveIdentityFn && peerId) {
-        identityContext = resolveIdentityFn(peerId);
+        try {
+          identityContext = await resolveIdentityFn(peerId);
+        } catch (resolveErr) {
+          logger.error('identity resolution failed — treating as first call', { error: resolveErr.message });
+        }
       }
 
       // Route query to OpenClaw agent.

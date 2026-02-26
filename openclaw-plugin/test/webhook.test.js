@@ -143,8 +143,8 @@ test('webhook - POST /voice/query returns 200 with agent response', async () => 
 
 test('webhook - POST /voice/query passes correct args to queryAgent', async () => {
   const calls = [];
-  const queryAgent = async (agentId, sessionId, prompt, peerId) => {
-    calls.push({ agentId, sessionId, prompt, peerId });
+  const queryAgent = async (agentId, sessionId, prompt, peerId, identityContext) => {
+    calls.push({ agentId, sessionId, prompt, peerId, identityContext });
     return 'ok';
   };
   await withServer(makeConfig({ queryAgent }), async (server) => {
@@ -155,6 +155,8 @@ test('webhook - POST /voice/query passes correct args to queryAgent', async () =
     assert.strictEqual(calls[0].agentId, 'morpheus');
     assert.strictEqual(calls[0].prompt, 'test prompt');
     assert.strictEqual(calls[0].peerId, '+15559999999');
+    assert.deepStrictEqual(calls[0].identityContext, { isFirstCall: true, identity: null },
+      'identityContext must default to first-call when no resolveIdentity configured');
   });
 });
 
@@ -630,6 +632,26 @@ test('webhook - startServer rejects when port is already in use', async () => {
   } finally {
     await new Promise((resolve) => server1.close(resolve));
   }
+});
+
+test('webhook - POST /voice/query falls back to first-call context when resolveIdentity throws', async () => {
+  const identityContexts = [];
+  const queryAgent = async (agentId, sessionId, prompt, peerId, identityContext) => {
+    identityContexts.push(identityContext);
+    return 'ok';
+  };
+  const resolveIdentity = () => { throw new Error('config corrupted'); };
+
+  await withServer(makeConfig({ queryAgent, resolveIdentity }), async (server) => {
+    const res = await request(server, {
+      path: '/voice/query', method: 'POST', headers: AUTH
+    }, { prompt: 'hello', callId: 'uuid-resolver-err', accountId: 'morpheus', peerId: '+15551234567' });
+
+    assert.strictEqual(res.status, 200, 'Call must not fail (503) when resolveIdentity throws');
+    assert.strictEqual(identityContexts.length, 1);
+    assert.deepStrictEqual(identityContexts[0], { isFirstCall: true, identity: null },
+      'Must fall back to first-call context when resolver throws');
+  });
 });
 
 // ── Identity resolution integration (Story 5.2) ──────────────────────────────

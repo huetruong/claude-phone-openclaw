@@ -1,6 +1,6 @@
 # Story 5.2: Dynamic Identity Enrollment
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -339,3 +339,4 @@ None — clean implementation, no debug investigation needed.
 ### Change Log
 
 - 2026-02-25: Story 5.2 implemented — dynamic identity enrollment via link_identity tool + caller context injection
+- 2026-02-25: Code review fixes — H1: in-memory rollback on write failure (AC 6 compliance); H2: missing params tests added (5 new tests); M1: rollback pattern resolves live-vs-snapshot concern; M2: await resolveIdentityFn for async compatibility; M3: identityContext assertion added to existing queryAgent arg test. Total tests: 353.
