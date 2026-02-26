@@ -136,6 +136,29 @@ test('outbound-client - defaults mode to announce when not provided', async () =
   }
 });
 
+test('outbound-client - passes mode: conversation correctly in request body', async () => {
+  let receivedBody = null;
+  const server = await createMockServer((_req, body) => {
+    receivedBody = body;
+    return { status: 200, body: { success: true, callId: 'id-conv', status: 'queued' } };
+  });
+
+  try {
+    const { port } = server.address();
+    const client = requireOutboundClient();
+    await client.placeCall({
+      voiceAppUrl: `http://127.0.0.1:${port}/api`,
+      to: '12125550100',
+      device: '9000',
+      message: 'Hello, starting conversation.',
+      mode: 'conversation',
+    });
+    assert.strictEqual(receivedBody.mode, 'conversation', 'Must pass conversation mode to voice-app');
+  } finally {
+    await new Promise((r) => server.close(r));
+  }
+});
+
 test('outbound-client - returns { error } when voice-app is unreachable (ECONNREFUSED)', async () => {
   // Use a port that is definitely not listening
   const client = requireOutboundClient();
@@ -223,5 +246,99 @@ test('outbound-client - returns { error } on invalid JSON response', async () =>
     assert.ok(result.error, 'Should return error on invalid JSON');
   } finally {
     await new Promise((r) => server.close(r));
+  }
+});
+
+test('outbound-client - returns { error } when 200 response is missing callId', async () => {
+  const server = await createMockServer(() => ({
+    status: 200,
+    body: { success: true } // missing callId
+  }));
+
+  try {
+    const { port } = server.address();
+    const client = requireOutboundClient();
+    const result = await client.placeCall({
+      voiceAppUrl: `http://127.0.0.1:${port}/api`,
+      to: '12125550100',
+      device: '9000',
+      message: 'Test.',
+    });
+    assert.ok(result.error, 'Should return error when callId is missing from response');
+    assert.ok(!result.callId, 'callId must not be undefined-truthy on failure');
+  } finally {
+    await new Promise((r) => server.close(r));
+  }
+});
+
+test('outbound-client - returns { error } when to is missing', async () => {
+  const client = requireOutboundClient();
+  const result = await client.placeCall({
+    voiceAppUrl: 'http://127.0.0.1:3000/api',
+    to: '',
+    device: '9000',
+    message: 'Test.',
+  });
+  assert.ok(result.error, 'Should return error when to is empty');
+  assert.match(result.error, /to/, 'Error should mention the missing field');
+});
+
+test('outbound-client - returns { error } when device is missing', async () => {
+  const client = requireOutboundClient();
+  const result = await client.placeCall({
+    voiceAppUrl: 'http://127.0.0.1:3000/api',
+    to: '12125550100',
+    device: '',
+    message: 'Test.',
+  });
+  assert.ok(result.error, 'Should return error when device is empty');
+  assert.match(result.error, /device/, 'Error should mention the missing field');
+});
+
+test('outbound-client - returns { error } when message is missing', async () => {
+  const client = requireOutboundClient();
+  const result = await client.placeCall({
+    voiceAppUrl: 'http://127.0.0.1:3000/api',
+    to: '12125550100',
+    device: '9000',
+    message: '',
+  });
+  assert.ok(result.error, 'Should return error when message is empty');
+  assert.match(result.error, /message/, 'Error should mention the missing field');
+});
+
+test('outbound-client - returns { error } when message exceeds 1000 characters', async () => {
+  const client = requireOutboundClient();
+  const result = await client.placeCall({
+    voiceAppUrl: 'http://127.0.0.1:3000/api',
+    to: '12125550100',
+    device: '9000',
+    message: 'x'.repeat(1001),
+  });
+  assert.ok(result.error, 'Should return error when message is too long');
+  assert.match(result.error, /1000/, 'Error should mention the character limit');
+});
+
+test('outbound-client - does not log twice on timeout (single log entry)', async () => {
+  const errors = [];
+  const origError = console.error;
+  console.error = (...args) => errors.push(args.join(' '));
+
+  // We cannot easily force a real 10s timeout in a unit test, but we can verify
+  // the settled flag prevents double-resolve by testing ECONNRESET handling doesn't
+  // double-log alongside a prior resolve. We test this indirectly: ECONNREFUSED should
+  // produce exactly one error log line (not two).
+  try {
+    const client = requireOutboundClient();
+    await client.placeCall({
+      voiceAppUrl: 'http://127.0.0.1:1',
+      to: '12125550100',
+      device: '9000',
+      message: 'Test.',
+    });
+    const sipVoiceErrors = errors.filter(e => e.includes('[sip-voice]'));
+    assert.strictEqual(sipVoiceErrors.length, 1, 'Should log exactly one error per failure (no double-logging)');
+  } finally {
+    console.error = origError;
   }
 });

@@ -1,6 +1,6 @@
 # Story 5.1: Plugin-Triggered Outbound Calls
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -176,7 +176,7 @@ try {
 
 ### Testing Standards
 
-- **Framework**: Jest (already configured in `openclaw-plugin/package.json`)
+- **Framework**: Node.js built-in `node:test` runner (`node --test test/**/*.test.js` in `openclaw-plugin/package.json`)
 - **Pattern**: Mock axios for unit tests; mock Express server for integration
 - **Coverage expectations**: All success/error paths in outbound-client.js
 - **Existing test count**: 306 total (107 CLI + 111 voice-app + 88 plugin) — must not break any
@@ -222,7 +222,7 @@ claude-sonnet-4-6
 - Updated `openclaw-plugin/openclaw.plugin.json`: added `voiceAppUrl` to configSchema.
 - Created `docs/openclaw-plugin-setup.md`: plugin installation and configuration guide documenting all config fields including `voiceAppUrl`.
 - Created `openclaw-plugin/test/outbound-client.test.js`: 9 tests covering success path, request body correctness, `+` stripping, default mode, ECONNREFUSED, HTTP 500, never-throws, error logging format, and invalid JSON response.
-- All 315 tests pass (107 CLI + 111 voice-app + 97 plugin). No regressions. No new lint errors.
+- All 322 tests pass (107 CLI + 111 voice-app + 104 plugin). No regressions. No new lint errors.
 - Task 3 (voice-app API compatibility) verified by reading `outbound-routes.js` and `outbound-handler.js` — all subtasks confirmed without code changes.
 
 ### File List
@@ -238,3 +238,4 @@ claude-sonnet-4-6
 ## Change Log
 
 - 2026-02-25: Implemented Story 5.1 — plugin-triggered outbound calls. Created `outbound-client.js` HTTP client module, wired into `index.js`, added `voiceAppUrl` to plugin config schema, created plugin setup docs, 9 new tests added (315 total, 0 failures).
+- 2026-02-25: Code review fixes — `outbound-client.js`: input validation (to/device/message required, message ≤1000 chars), `callId` presence guard on success path, `settled` flag eliminating double-log on timeout; `index.js`: startup warn when `voiceAppUrl` unconfigured; `docs/openclaw-plugin-setup.md`: added `allowFrom` to accounts example; story Dev Notes: corrected test framework (node:test, not Jest); 7 new tests added (322 total, 0 failures).

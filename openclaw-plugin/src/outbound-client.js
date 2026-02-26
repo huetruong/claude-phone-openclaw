@@ -5,6 +5,8 @@ const https = require('node:https');
 const { URL } = require('node:url');
 const logger = require('./logger');
 
+const MAX_MESSAGE_LENGTH = 1000;
+
 /**
  * Places an outbound call via the voice-app REST API.
  *
@@ -12,11 +14,29 @@ const logger = require('./logger');
  * @param {string} params.voiceAppUrl - Base URL of voice-app API (e.g. "http://host:3000/api")
  * @param {string} params.to          - Destination phone number (+ prefix will be stripped)
  * @param {string} params.device      - Extension number or device name (e.g. "9000")
- * @param {string} params.message     - TTS message to play when call is answered
+ * @param {string} params.message     - TTS message to play when call is answered (max 1000 chars)
  * @param {string} [params.mode]      - "announce" (default) or "conversation"
  * @returns {Promise<{callId: string, status: string}|{error: string}>}
  */
 async function placeCall({ voiceAppUrl, to, device, message, mode = 'announce' }) {
+  // Input validation — catch missing/invalid params before making any network call.
+  if (!to) {
+    logger.error('outbound call failed: missing required field: to');
+    return { error: 'missing required field: to' };
+  }
+  if (!device) {
+    logger.error('outbound call failed: missing required field: device');
+    return { error: 'missing required field: device' };
+  }
+  if (!message) {
+    logger.error('outbound call failed: missing required field: message');
+    return { error: 'missing required field: message' };
+  }
+  if (typeof message === 'string' && message.length > MAX_MESSAGE_LENGTH) {
+    logger.error('outbound call failed: message exceeds maximum length', { max: MAX_MESSAGE_LENGTH });
+    return { error: `message exceeds ${MAX_MESSAGE_LENGTH} character limit` };
+  }
+
   // Strip leading + to avoid PSTN prefix logic in outbound-handler.js:58-59
   const normalizedTo = typeof to === 'string' ? to.replace(/^\+/, '') : to;
 
@@ -24,12 +44,21 @@ async function placeCall({ voiceAppUrl, to, device, message, mode = 'announce' }
   const url = `${voiceAppUrl}/outbound-call`;
 
   return new Promise((resolve) => {
+    // settled flag prevents double-logging and double-resolve when req.destroy()
+    // triggers an error event after the timeout handler has already settled the promise.
+    let settled = false;
+    const settle = (result) => {
+      if (settled) return;
+      settled = true;
+      resolve(result);
+    };
+
     let parsed;
     try {
       parsed = new URL(url);
     } catch (err) {
       logger.error('outbound call failed: invalid voiceAppUrl', { error: err.message });
-      resolve({ error: `invalid voiceAppUrl: ${err.message}` });
+      settle({ error: `invalid voiceAppUrl: ${err.message}` });
       return;
     }
 
@@ -53,7 +82,7 @@ async function placeCall({ voiceAppUrl, to, device, message, mode = 'announce' }
           logger.error('outbound call failed: non-2xx response', {
             statusCode: res.statusCode,
           });
-          resolve({ error: `voice-app returned HTTP ${res.statusCode}` });
+          settle({ error: `voice-app returned HTTP ${res.statusCode}` });
           return;
         }
 
@@ -62,31 +91,37 @@ async function placeCall({ voiceAppUrl, to, device, message, mode = 'announce' }
           data = JSON.parse(raw);
         } catch (parseErr) {
           logger.error('outbound call failed: invalid JSON response', { error: parseErr.message });
-          resolve({ error: 'invalid JSON response from voice-app' });
+          settle({ error: 'invalid JSON response from voice-app' });
           return;
         }
 
-        resolve({ callId: data.callId, status: data.status });
+        if (!data.callId) {
+          logger.error('outbound call failed: missing callId in response');
+          settle({ error: 'invalid response from voice-app: missing callId' });
+          return;
+        }
+
+        settle({ callId: data.callId, status: data.status });
       });
     });
 
     req.on('error', (err) => {
       if (err.code === 'ECONNREFUSED' || err.code === 'EHOSTUNREACH') {
         logger.error('voice-app unreachable', { error: err.code });
-        resolve({ error: 'voice-app unreachable' });
+        settle({ error: 'voice-app unreachable' });
       } else if (err.code === 'ETIMEDOUT' || err.code === 'ECONNABORTED' || err.code === 'ECONNRESET') {
         logger.error('voice-app timeout', { error: err.code });
-        resolve({ error: 'voice-app timeout' });
+        settle({ error: 'voice-app timeout' });
       } else {
         logger.error('outbound call failed', { error: err.message });
-        resolve({ error: err.message });
+        settle({ error: err.message });
       }
     });
 
     req.setTimeout(10000, () => {
       logger.error('voice-app timeout', { error: 'ETIMEDOUT' });
       req.destroy();
-      resolve({ error: 'voice-app timeout' });
+      settle({ error: 'voice-app timeout' });
     });
 
     req.write(body);

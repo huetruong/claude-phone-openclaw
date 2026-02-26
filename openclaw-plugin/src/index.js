@@ -73,6 +73,9 @@ const plugin = {
     const accounts = config.accounts || [];
     const bindings = config.bindings || [];
     const voiceAppUrl = config.voiceAppUrl || null;
+    if (!voiceAppUrl) {
+      logger.warn('voiceAppUrl not configured — outbound calls will fail until set in plugin config');
+    }
 
     // Internal function: place an outbound call via the voice-app REST API.
     // Prepared for Story 5.4's place_call agent tool — not yet exposed as a tool.

@@ -24,8 +24,10 @@ sip-voice:
   accounts:
     - id: morpheus
       extension: "9000"
+      allowFrom: ["+15551234567"]  # optional: restrict callers; empty/missing = allow all
     - id: cephanie
       extension: "9001"
+      allowFrom: []                # empty = allow all callers
   bindings:
     - accountId: morpheus
       agentId: morpheus
