@@ -8,6 +8,7 @@ const { execSync } = require('child_process');
 const logger = require('./logger');
 const sessionStore = require('./session-store');
 const { createServer, startServer } = require('./webhook-server');
+const outboundClient = require('./outbound-client');
 
 // ---------------------------------------------------------------------------
 // extensionAPI loader
@@ -71,6 +72,14 @@ const plugin = {
     const config = api.pluginConfig || {};
     const accounts = config.accounts || [];
     const bindings = config.bindings || [];
+    const voiceAppUrl = config.voiceAppUrl || null;
+    if (!voiceAppUrl) {
+      logger.warn('voiceAppUrl not configured — outbound calls will fail until set in plugin config');
+    }
+
+    // Internal function: place an outbound call via the voice-app REST API.
+    // Prepared for Story 5.4's place_call agent tool — not yet exposed as a tool.
+    plugin.placeCall = (params) => outboundClient.placeCall({ voiceAppUrl, ...params });
 
     // Reap stale sessions from prior gateway runs (OpenClaw bug #3290).
     sessionStore.clear();
