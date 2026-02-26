@@ -620,13 +620,10 @@ test('index - queryAgent (Task 5.1): known caller with channels includes textCha
     await capturedQueryAgent('morpheus', 'call-uuid-c1', 'hello', '+15551234567', { identity: 'hue', isFirstCall: false });
     assert.strictEqual(runCalls.length, 1, 'runEmbeddedPiAgent must be called once');
     const prompt = runCalls[0].prompt;
+    const expectedCtx = '[CALLER CONTEXT: Known caller, identity="hue", textChannels=["discord:987654321"]]';
     assert.ok(
-      prompt.includes('textChannels=["discord:987654321"]'),
-      `enriched prompt must include textChannels=["discord:987654321"], got: ${prompt}`
-    );
-    assert.ok(
-      prompt.includes('identity="hue"'),
-      `enriched prompt must include identity="hue", got: ${prompt}`
+      prompt.startsWith(expectedCtx),
+      `enriched prompt must start with exact CALLER CONTEXT line, got: ${prompt}`
     );
   } finally {
     await cleanup();
@@ -640,9 +637,10 @@ test('index - queryAgent (Task 5.2): known caller with NO channels includes text
   try {
     await capturedQueryAgent('morpheus', 'call-uuid-c2', 'hello', '+15551234567', { identity: 'hue', isFirstCall: false });
     const prompt = runCalls[0].prompt;
+    const expectedCtx = '[CALLER CONTEXT: Known caller, identity="hue", textChannels=none]';
     assert.ok(
-      prompt.includes('textChannels=none'),
-      `enriched prompt must include textChannels=none when no text channels configured, got: ${prompt}`
+      prompt.startsWith(expectedCtx),
+      `enriched prompt must start with exact CALLER CONTEXT line, got: ${prompt}`
     );
   } finally {
     await cleanup();
@@ -654,13 +652,14 @@ test('index - queryAgent (Task 5.3): first-time caller does NOT include textChan
   try {
     await capturedQueryAgent('morpheus', 'call-uuid-c3', 'hello', '+15551234567', { isFirstCall: true, identity: null });
     const prompt = runCalls[0].prompt;
+    const expectedCtx = '[CALLER CONTEXT: First-time caller, no identity on file, phone="+15551234567"]';
+    assert.ok(
+      prompt.startsWith(expectedCtx),
+      `first-time caller enriched prompt must start with exact CALLER CONTEXT line, got: ${prompt}`
+    );
     assert.ok(
       !prompt.includes('textChannels'),
       `first-time caller enriched prompt must NOT include textChannels, got: ${prompt}`
-    );
-    assert.ok(
-      prompt.includes('First-time caller'),
-      `first-time caller enriched prompt must include "First-time caller", got: ${prompt}`
     );
   } finally {
     await cleanup();

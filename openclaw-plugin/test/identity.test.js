@@ -398,6 +398,15 @@ test('identity - resolveUserChannels (4.7): mixed sip-voice and non-sip-voice en
   assert.deepStrictEqual(result, ['discord:987654321', 'telegram:@hue']);
 });
 
+test('identity - resolveUserChannels (4.8): SIP-only plugin config falls through to session config for text channels', () => {
+  const { resolveUserChannels } = requireIdentity();
+  // Production scenario: operator configured phone in plugin config; user enrolled Discord via link_identity (session config)
+  const pluginConfig = { identityLinks: { hue: ['sip-voice:15551234567'] } };
+  const ocConfig = { session: { identityLinks: { hue: ['sip-voice:15551234567', 'discord:987654321'] } } };
+  const result = resolveUserChannels(pluginConfig, ocConfig, 'hue');
+  assert.deepStrictEqual(result, ['discord:987654321']);
+});
+
 test('identity - link_identity: concurrent enrollments are serialized by mutex', async () => {
   const { createLinkIdentityHandler } = requireIdentity();
 

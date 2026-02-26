@@ -198,22 +198,22 @@ const plugin = {
 
       const suffix = resolveSessionSuffix(identityContext, peerId, sessionId);
 
-      // Resolve text channels for known callers to inform response medium selection.
-      const userChannels = (identityContext && identityContext.identity)
-        ? resolveUserChannels(config, ocConfig, identityContext.identity)
-        : [];
-      const channelInfo = userChannels.length > 0
-        ? `textChannels=${JSON.stringify(userChannels)}`
-        : 'textChannels=none';
-
       // Prepend caller context so the agent knows whether to run enrollment flow.
       // For first-time callers, include the phone number so the agent can pass it
       // to link_identity — without it, enrollment is impossible.
       let enrichedPrompt = prompt;
       if (identityContext) {
-        const ctxLine = identityContext.isFirstCall
-          ? `[CALLER CONTEXT: First-time caller, no identity on file${peerId ? `, phone="${peerId}"` : ''}]`
-          : `[CALLER CONTEXT: Known caller, identity="${identityContext.identity}", ${channelInfo}]`;
+        let ctxLine;
+        if (identityContext.isFirstCall) {
+          ctxLine = `[CALLER CONTEXT: First-time caller, no identity on file${peerId ? `, phone="${peerId}"` : ''}]`;
+        } else {
+          // Resolve text channels for known callers to inform response medium selection.
+          const userChannels = resolveUserChannels(config, ocConfig, identityContext.identity);
+          const channelInfo = userChannels.length > 0
+            ? `textChannels=${JSON.stringify(userChannels)}`
+            : 'textChannels=none';
+          ctxLine = `[CALLER CONTEXT: Known caller, identity="${identityContext.identity}", ${channelInfo}]`;
+        }
         enrichedPrompt = ctxLine + '\n' + prompt;
       }
       const sessionKey = `sip-voice:${agentId}:${suffix}`;

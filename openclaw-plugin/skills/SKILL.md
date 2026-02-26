@@ -137,9 +137,11 @@ Voice is low-bandwidth — optimize your responses for spoken delivery.
 ### Rules
 
 1. **Short response** (≤~40 words, no structured data): Speak the full response. No special formatting needed.
-2. **Long response + user has textChannels**: Prefix your voice summary with `🗣️ VOICE_RESPONSE:` and mention where the full output went.
-   Example: `🗣️ VOICE_RESPONSE: Deployment complete, three services updated. Full report sent to your Discord.`
-3. **Long response + no textChannels** (`textChannels=none`): Prefix a best-effort truncated summary with `🗣️ VOICE_RESPONSE:` and inform the user.
+2. **Long response + user has textChannels**: Write the complete full response first, then prefix your voice summary line with `🗣️ VOICE_RESPONSE:`. OpenClaw routes the full response body to the user's primary text channel automatically — your job is to structure the output correctly.
+   - Put the `🗣️ VOICE_RESPONSE:` line **first**, followed by the full response content below it.
+   - The voice summary must reference the delivery: e.g. "Full report sent to your Discord."
+   - Example: `🗣️ VOICE_RESPONSE: Deployment complete, three services updated. Full report sent to your Discord.`
+3. **Long response + no textChannels** (`textChannels=none`): Prefix a best-effort truncated summary with `🗣️ VOICE_RESPONSE:` and inform the user. No full response body needed since there is no channel to route it to.
    Example: `🗣️ VOICE_RESPONSE: Deployment complete with three service updates. I have more detail, but you don't have a text channel linked. Say "link identity" to add one.`
 
 ### What counts as "long or complex"

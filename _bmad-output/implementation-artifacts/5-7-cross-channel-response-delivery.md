@@ -1,6 +1,6 @@
 # Story 5.7: Cross-Channel Response Delivery
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -340,7 +340,9 @@ None — clean implementation, no debugging required.
 - `openclaw-plugin/skills/SKILL.md` — Updated `Call Continuity` section to show new context format; added `## Voice Response Management` section
 - `openclaw-plugin/test/identity.test.js` — Added 7 unit tests for `resolveUserChannels` (Tasks 4.1–4.7)
 - `openclaw-plugin/test/index.test.js` — Extended `setupQueryAgentEnv()` to accept `opts`; added 3 integration tests for channel-enriched prompt (Tasks 5.1–5.3)
+- `_bmad-output/implementation-artifacts/sprint-status.yaml` — Updated `5-7-cross-channel-response-delivery` status to `review`
 
 ## Change Log
 
 - 2026-02-26: Implemented Story 5.7 — cross-channel response delivery. Added `resolveUserChannels()` to identity.js; enriched `[CALLER CONTEXT]` in queryAgent with `textChannels` info; added Voice Response Management section to SKILL.md; 10 new tests (417 total, all pass).
+- 2026-02-26: Code review fixes — clarified SKILL.md Rule 2 to explicitly instruct agents to include full response body after `🗣️ VOICE_RESPONSE:` marker; guarded channelInfo computation inside identityContext branch (L3); added test 4.8 for SIP-only plugin config falling through to session discord (L1); strengthened integration tests 5.1–5.3 to assert exact CALLER CONTEXT line format (L2); added sprint-status.yaml to File List (M1). 418 total tests, all pass.
