@@ -25,10 +25,15 @@ function requireIndex() {
 }
 
 function createMockApi(pluginConfig = {}) {
-  const calls = { registerService: [], registerChannel: [] };
+  const calls = { registerService: [], registerChannel: [], registerTool: [] };
   return {
     pluginConfig,
     config: {},  // OpenClawConfig — empty object is sufficient for unit tests
+    runtime: {
+      config: {
+        writeConfigFile: async () => {},
+      },
+    },
     logger: {
       info: () => {},
       warn: () => {},
@@ -40,6 +45,9 @@ function createMockApi(pluginConfig = {}) {
     },
     registerChannel(channelDef) {
       calls.registerChannel.push(channelDef);
+    },
+    registerTool(toolDef) {
+      calls.registerTool.push(toolDef);
     },
     _calls: calls,
   };
@@ -268,4 +276,45 @@ test('index - register() propagates if api.registerService throws', () => {
     /service conflict/,
     'register() must propagate errors from registerService'
   );
+});
+
+// ---------------------------------------------------------------------------
+// link_identity tool registration (Story 5.2)
+// ---------------------------------------------------------------------------
+
+test('index - register() calls api.registerTool() with link_identity', () => {
+  const plugin = requireIndex();
+  const api = createMockApi({ accounts: [], bindings: [] });
+  plugin.register(api);
+  const toolNames = api._calls.registerTool.map(t => t.name);
+  assert.ok(toolNames.includes('link_identity'), 'Must register link_identity tool');
+});
+
+test('index - link_identity tool has a schema with required name and peerId', () => {
+  const plugin = requireIndex();
+  const api = createMockApi({ accounts: [], bindings: [] });
+  plugin.register(api);
+  const tool = api._calls.registerTool.find(t => t.name === 'link_identity');
+  assert.ok(tool, 'link_identity tool must be registered');
+  assert.ok(tool.schema, 'tool must have a schema');
+  assert.ok(Array.isArray(tool.schema.required), 'schema.required must be an array');
+  assert.ok(tool.schema.required.includes('name'), 'schema must require name');
+  assert.ok(tool.schema.required.includes('peerId'), 'schema must require peerId');
+});
+
+test('index - link_identity tool has an async handler function', () => {
+  const plugin = requireIndex();
+  const api = createMockApi({ accounts: [], bindings: [] });
+  plugin.register(api);
+  const tool = api._calls.registerTool.find(t => t.name === 'link_identity');
+  assert.ok(tool, 'link_identity tool must be registered');
+  assert.strictEqual(typeof tool.handler, 'function', 'tool must have a handler function');
+});
+
+test('index - register() still calls api.registerService() exactly once alongside registerTool', () => {
+  const plugin = requireIndex();
+  const api = createMockApi({ accounts: [], bindings: [] });
+  plugin.register(api);
+  assert.strictEqual(api._calls.registerService.length, 1, 'registerService must still be called once');
+  assert.strictEqual(api._calls.registerTool.length, 1, 'registerTool must be called once for link_identity');
 });

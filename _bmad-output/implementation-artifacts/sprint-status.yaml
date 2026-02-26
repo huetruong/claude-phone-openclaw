@@ -68,7 +68,7 @@ development_status:
 
   epic-5: in-progress
   5-1-plugin-triggered-outbound-calls: done
-  5-2-dynamic-identity-enrollment: backlog
+  5-2-dynamic-identity-enrollment: done
   5-3-dynamic-greeting-and-call-continuity: backlog
   5-4-agent-tools-and-skill-md: backlog
   5-5-identity-resolution-outbound-callbacks: backlog

@@ -9,6 +9,7 @@ const logger = require('./logger');
 const sessionStore = require('./session-store');
 const { createServer, startServer } = require('./webhook-server');
 const outboundClient = require('./outbound-client');
+const { resolveIdentity, createLinkIdentityHandler } = require('./identity');
 
 // ---------------------------------------------------------------------------
 // extensionAPI loader
@@ -81,6 +82,26 @@ const plugin = {
     // Prepared for Story 5.4's place_call agent tool — not yet exposed as a tool.
     plugin.placeCall = (params) => outboundClient.placeCall({ voiceAppUrl, ...params });
 
+    // Register link_identity agent tool — allows agents to enroll new callers
+    // by linking their phone number to a canonical identity in openclaw.json.
+    api.registerTool({
+      name: 'link_identity',
+      schema: {
+        type: 'object',
+        properties: {
+          name: { type: 'string', description: 'Canonical name for the caller (e.g., "hue")' },
+          channels: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Additional channel identifiers (e.g., ["discord:987654321"])',
+          },
+          peerId: { type: 'string', description: 'Phone number being enrolled' },
+        },
+        required: ['name', 'peerId'],
+      },
+      handler: createLinkIdentityHandler(api),
+    });
+
     // Reap stale sessions from prior gateway runs (OpenClaw bug #3290).
     sessionStore.clear();
 
@@ -91,9 +112,18 @@ const plugin = {
     // in-process. Session is scoped per-agent per-call so concurrent
     // calls to different agents are fully isolated.
     // ------------------------------------------------------------------
-    const queryAgent = async (agentId, sessionId, prompt /*, peerId */) => {
+    const queryAgent = async (agentId, sessionId, prompt, peerId, identityContext) => {
       const ext = await getExtensionAPI();
       const ocConfig = api.config;
+
+      // Prepend caller context so the agent knows whether to run enrollment flow.
+      let enrichedPrompt = prompt;
+      if (identityContext) {
+        const ctxLine = identityContext.isFirstCall
+          ? '[CALLER CONTEXT: First-time caller, no identity on file]'
+          : `[CALLER CONTEXT: Known caller, identity="${identityContext.identity}"]`;
+        enrichedPrompt = ctxLine + '\n' + prompt;
+      }
 
       const sessionKey = `sip-voice:${agentId}:${sessionId}`;
       const storePath = path.dirname(ext.resolveStorePath(ocConfig?.session?.store));
@@ -111,7 +141,7 @@ const plugin = {
         sessionFile,
         workspaceDir,
         config: ocConfig,
-        prompt,
+        prompt: enrichedPrompt,
         timeoutMs: config.agentTimeoutMs || 30000,
         runId: `sip:${sessionId}:${Date.now()}`,
         lane: 'voice',
@@ -146,6 +176,7 @@ const plugin = {
           bindings,
           accounts,
           queryAgent,
+          resolveIdentity: (peerId) => resolveIdentity(api.config, peerId),
         });
         const port = config.webhookPort || 47334;
         _server = await startServer(app, port);

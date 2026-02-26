@@ -13,7 +13,8 @@ const { createAuthMiddleware } = require('./auth');
  * @param {string} config.apiKey - Bearer token for auth middleware
  * @param {Array}  config.bindings - accountId → agentId mapping array
  * @param {Array}  config.accounts - account definitions (for future allowlist enforcement)
- * @param {Function} config.queryAgent - async (agentId, sessionId, prompt, peerId) => string
+ * @param {Function} config.queryAgent - async (agentId, sessionId, prompt, peerId, identityContext) => string
+ * @param {Function} [config.resolveIdentity] - optional (peerId) => { isFirstCall, identity }
  */
 function createServer(config = {}) {
   if (typeof config.queryAgent !== 'function') {
@@ -30,6 +31,7 @@ function createServer(config = {}) {
   }
 
   const queryAgent = config.queryAgent;
+  const resolveIdentityFn = typeof config.resolveIdentity === 'function' ? config.resolveIdentity : null;
 
   // Health endpoint is unauthenticated — no body parsing needed.
   app.get('/voice/health', (req, res) => {
@@ -72,8 +74,20 @@ function createServer(config = {}) {
         sessionStore.create(callId, sessionId);
       }
 
+      // Resolve caller identity before routing — default to first-call context.
+      // await handles both sync and async resolvers transparently.
+      // A broken resolver must not abort the call — fall back to first-call context.
+      let identityContext = { isFirstCall: true, identity: null };
+      if (resolveIdentityFn && peerId) {
+        try {
+          identityContext = await resolveIdentityFn(peerId);
+        } catch (resolveErr) {
+          logger.error('identity resolution failed — treating as first call', { error: resolveErr.message });
+        }
+      }
+
       // Route query to OpenClaw agent.
-      const response = await queryAgent(agentId, sessionId, prompt, peerId);
+      const response = await queryAgent(agentId, sessionId, prompt, peerId, identityContext);
       res.json({ response });
     } catch (err) {
       logger.error('query failed', { callId: (req.body || {}).callId, error: err.message });
