@@ -420,26 +420,28 @@ test('index - queryAgent passes resolveSessionSuffix result to createServer', as
   const api2 = createMockApi({ accounts: [], bindings: [], apiKey: 'test' });
   plugin2.register(api2);
   const service = api2._calls.registerService[0];
-  await service.start();
+  try {
+    await service.start();
 
-  assert.ok(capturedQueryAgent, 'queryAgent must be passed to createServer');
-  assert.strictEqual(typeof capturedQueryAgent, 'function', 'queryAgent must be a function');
+    assert.ok(capturedQueryAgent, 'queryAgent must be passed to createServer');
+    assert.strictEqual(typeof capturedQueryAgent, 'function', 'queryAgent must be a function');
+  } finally {
+    await service.stop();
 
-  await service.stop();
-
-  // Restore original webhook-server mock
-  require.cache[require.resolve('../src/webhook-server')] = {
-    id: require.resolve('../src/webhook-server'),
-    filename: require.resolve('../src/webhook-server'),
-    loaded: true,
-    exports: {
-      createServer: () => ({ _isMock: true }),
-      startServer: async () => _mockServerHandle,
-    }
-  };
+    // Restore original webhook-server mock
+    require.cache[require.resolve('../src/webhook-server')] = {
+      id: require.resolve('../src/webhook-server'),
+      filename: require.resolve('../src/webhook-server'),
+      loaded: true,
+      exports: {
+        createServer: () => ({ _isMock: true }),
+        startServer: async () => _mockServerHandle,
+      }
+    };
+  }
 });
 
-test('index - queryAgent session integration: resolveSessionSuffix correctly computes all three variants', () => {
+test('index - resolveSessionSuffix: covers all three AC variants including edge cases (null, undefined, empty peerId)', () => {
   const plugin = requireIndex();
   const fn = plugin._resolveSessionSuffix;
 
@@ -449,10 +451,149 @@ test('index - queryAgent session integration: resolveSessionSuffix correctly com
   // AC #2: unenrolled caller with phone
   assert.strictEqual(fn({ isFirstCall: true }, '+15551234567', 'uuid-2'), '15551234567');
 
-  // AC #3: no peerId (extension-only call)
+  // AC #3: no peerId (extension-only call) — null, undefined, and empty string all fall back to callId
   assert.strictEqual(fn(null, null, 'uuid-3'), 'uuid-3');
   assert.strictEqual(fn(undefined, undefined, 'uuid-4'), 'uuid-4');
   assert.strictEqual(fn({}, '', 'uuid-5'), 'uuid-5');
+});
+
+// ---------------------------------------------------------------------------
+// resolveSessionSuffix edge cases (M2 / M3 guard coverage)
+// ---------------------------------------------------------------------------
+
+test('index - resolveSessionSuffix: peerId of only "+" falls back to callId after stripping', () => {
+  const plugin = requireIndex();
+  // '+' normalizes to '' which is falsy — must fall through to callId
+  const result = plugin._resolveSessionSuffix(null, '+', 'call-uuid-123');
+  assert.strictEqual(result, 'call-uuid-123', '"+" peerId must fall back to callId, not empty string');
+});
+
+test('index - resolveSessionSuffix: empty string identity falls through to peerId', () => {
+  const plugin = requireIndex();
+  // identity='' is falsy — must be treated as no identity, fall through to peerId
+  const result = plugin._resolveSessionSuffix({ identity: '', isFirstCall: false }, '+15551234567', 'call-uuid-123');
+  assert.strictEqual(result, '15551234567', 'Empty string identity must be ignored, fall through to peerId');
+});
+
+// ---------------------------------------------------------------------------
+// queryAgent direct integration tests (Story 5.5, Tasks 4.1-4.5)
+// These tests inject a mock extensionAPI via _setExtensionAPIForTest to invoke
+// queryAgent end-to-end and assert exactly what runEmbeddedPiAgent receives.
+// ---------------------------------------------------------------------------
+
+/**
+ * Sets up a queryAgent test environment:
+ * - Injects a capturing webhook-server mock to extract the queryAgent closure
+ * - Injects a mock extensionAPI to avoid ESM dynamic import of openclaw internals
+ * - Returns { capturedQueryAgent, runCalls, service, cleanup }
+ */
+async function setupQueryAgentEnv() {
+  const runCalls = [];
+  let capturedQueryAgent = null;
+
+  require.cache[require.resolve('../src/webhook-server')] = {
+    id: require.resolve('../src/webhook-server'),
+    filename: require.resolve('../src/webhook-server'),
+    loaded: true,
+    exports: {
+      createServer: (opts) => { capturedQueryAgent = opts.queryAgent; return { _isMock: true }; },
+      startServer: async () => _mockServerHandle,
+    }
+  };
+
+  const mockExt = {
+    resolveStorePath: () => '/fake/store/sessions.db',
+    resolveAgentDir: (_cfg, agentId) => `/fake/agents/${agentId}`,
+    resolveAgentWorkspaceDir: (_cfg, agentId) => `/fake/agents/${agentId}/workspace`,
+    ensureAgentWorkspace: async () => {},
+    runEmbeddedPiAgent: async (opts) => { runCalls.push(opts); return { payloads: [{ text: 'ok', isError: false }] }; },
+  };
+
+  const plugin = requireIndex();
+  plugin._setExtensionAPIForTest(mockExt);
+  const api = createMockApi({ accounts: [], bindings: [], apiKey: 'test' });
+  plugin.register(api);
+  const service = api._calls.registerService[0];
+  await service.start();
+
+  const cleanup = async () => {
+    await service.stop();
+    require.cache[require.resolve('../src/webhook-server')] = {
+      id: require.resolve('../src/webhook-server'),
+      filename: require.resolve('../src/webhook-server'),
+      loaded: true,
+      exports: {
+        createServer: () => ({ _isMock: true }),
+        startServer: async () => _mockServerHandle,
+      }
+    };
+  };
+
+  return { capturedQueryAgent, runCalls, service, cleanup };
+}
+
+test('index - queryAgent (Task 4.1): enrolled identity produces sip-voice/morpheus-hue.jsonl session file', async () => {
+  const { capturedQueryAgent, runCalls, cleanup } = await setupQueryAgentEnv();
+  try {
+    await capturedQueryAgent('morpheus', 'call-uuid-1', 'hello', '+15551234567', { identity: 'hue', isFirstCall: false });
+    assert.strictEqual(runCalls.length, 1, 'runEmbeddedPiAgent must be called once');
+    assert.ok(
+      runCalls[0].sessionFile.endsWith(`morpheus-hue.jsonl`),
+      `sessionFile must end with morpheus-hue.jsonl, got: ${runCalls[0].sessionFile}`
+    );
+  } finally {
+    await cleanup();
+  }
+});
+
+test('index - queryAgent (Task 4.2): unenrolled caller produces sip-voice/morpheus-15551234567.jsonl session file', async () => {
+  const { capturedQueryAgent, runCalls, cleanup } = await setupQueryAgentEnv();
+  try {
+    await capturedQueryAgent('morpheus', 'call-uuid-2', 'hello', '+15551234567', { isFirstCall: true, identity: null });
+    assert.ok(
+      runCalls[0].sessionFile.endsWith('morpheus-15551234567.jsonl'),
+      `sessionFile must end with morpheus-15551234567.jsonl, got: ${runCalls[0].sessionFile}`
+    );
+  } finally {
+    await cleanup();
+  }
+});
+
+test('index - queryAgent (Task 4.3): no peerId falls back to callId-keyed session file', async () => {
+  const { capturedQueryAgent, runCalls, cleanup } = await setupQueryAgentEnv();
+  try {
+    await capturedQueryAgent('morpheus', 'call-uuid-3', 'hello', null, null);
+    assert.ok(
+      runCalls[0].sessionFile.endsWith('morpheus-call-uuid-3.jsonl'),
+      `sessionFile must end with morpheus-call-uuid-3.jsonl, got: ${runCalls[0].sessionFile}`
+    );
+  } finally {
+    await cleanup();
+  }
+});
+
+test('index - queryAgent (Task 4.4): enrolled identity produces correct sessionKey and sessionId', async () => {
+  const { capturedQueryAgent, runCalls, cleanup } = await setupQueryAgentEnv();
+  try {
+    await capturedQueryAgent('morpheus', 'call-uuid-4', 'hello', '+15551234567', { identity: 'hue', isFirstCall: false });
+    const opts = runCalls[0];
+    assert.strictEqual(opts.sessionKey, 'sip-voice:morpheus:hue', `sessionKey must be sip-voice:morpheus:hue, got: ${opts.sessionKey}`);
+    assert.strictEqual(opts.sessionId, 'hue', `sessionId passed to runEmbeddedPiAgent must be 'hue', got: ${opts.sessionId}`);
+  } finally {
+    await cleanup();
+  }
+});
+
+test('index - queryAgent (Task 4.5): runId uses callId not identity suffix', async () => {
+  const { capturedQueryAgent, runCalls, cleanup } = await setupQueryAgentEnv();
+  try {
+    await capturedQueryAgent('morpheus', 'call-uuid-5', 'hello', '+15551234567', { identity: 'hue', isFirstCall: false });
+    const { runId } = runCalls[0];
+    assert.ok(runId.startsWith('sip:call-uuid-5:'), `runId must start with 'sip:call-uuid-5:', got: ${runId}`);
+    assert.ok(!runId.includes(':hue:'), `runId must NOT contain identity suffix ':hue:', got: ${runId}`);
+  } finally {
+    await cleanup();
+  }
 });
 
 // ---------------------------------------------------------------------------

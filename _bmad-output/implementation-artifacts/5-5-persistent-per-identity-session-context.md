@@ -1,6 +1,6 @@
 # Story 5.5: Persistent Per-Identity Session Context
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -255,14 +255,19 @@ None — clean implementation with no blocking issues.
 - Updated `queryAgent` to use `suffix` for `sessionKey`, `sessionFile`, and `sessionId` passed to `runEmbeddedPiAgent`
 - `runId` remains `sip:${sessionId}:${Date.now()}` using the original callId for per-invocation uniqueness
 - Exported `resolveSessionSuffix` as `plugin._resolveSessionSuffix` for test access
-- Added 7 new tests (5 unit + 2 integration) covering all three session key variants and edge cases
-- All 387 tests pass (107 CLI + 126 voice-app + 154 plugin), 0 lint errors
+- Exported `_setExtensionAPIForTest` test seam to allow ESM-free mocking of extensionAPI in integration tests
+- Added 14 new tests total: 7 unit tests for `resolveSessionSuffix` + 2 edge case guards + 5 real integration tests for Tasks 4.1–4.5
+- Integration tests (Tasks 4.1–4.5) use mocked extensionAPI via `_setExtensionAPIForTest` and verify exact `sessionFile`, `sessionKey`, `sessionId`, and `runId` values passed to `runEmbeddedPiAgent`
+- Fixed `resolveSessionSuffix` edge case: `peerId = '+'` (strips to empty string) now correctly falls back to `callId` instead of returning `''`
+- Added JSDoc to `queryAgent` closure clarifying parameter semantics
+- All 407 tests pass (107 CLI + 126 voice-app + 174 plugin), 0 lint errors
 
 ### Change Log
 
 - 2026-02-26: Implemented persistent per-identity session context — session files now keyed by identity name or phone number instead of ephemeral callId
+- 2026-02-26: Code review fixes — real integration tests for Tasks 4.1–4.5, edge case guard for `peerId='+'`, try/finally in integration test, JSDoc on `queryAgent`
 
 ### File List
 
-- `openclaw-plugin/src/index.js` — Added `resolveSessionSuffix()` helper, updated `queryAgent` to use identity-based session keys
-- `openclaw-plugin/test/index.test.js` — Added 7 tests for `resolveSessionSuffix` unit tests and session integration tests
+- `openclaw-plugin/src/index.js` — Added `resolveSessionSuffix()` helper, updated `queryAgent` to use identity-based session keys, added `_setExtensionAPIForTest` seam, fixed `peerId='+'` edge case, added `queryAgent` JSDoc
+- `openclaw-plugin/test/index.test.js` — Added 14 tests: 5 real integration tests for Tasks 4.1–4.5 with mocked extensionAPI, 2 edge case unit tests, try/finally fix, test name correction

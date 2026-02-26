@@ -64,7 +64,8 @@ function resolveSessionSuffix(identityContext, peerId, callId) {
     return identityContext.identity;
   }
   if (peerId) {
-    return peerId.replace(/^\+/, '');
+    const normalized = peerId.replace(/^\+/, '');
+    if (normalized) return normalized;
   }
   return callId;
 }
@@ -177,6 +178,20 @@ const plugin = {
     // in-process. Session is keyed by caller identity (enrolled name
     // or phone number) so context persists across calls.
     // ------------------------------------------------------------------
+    /**
+     * Routes a voice prompt to a named OpenClaw agent.
+     *
+     * Session is keyed by caller identity (enrolled name or normalized phone number)
+     * so context persists across calls. Falls back to ephemeral callId-keyed session
+     * when no identity context is available.
+     *
+     * @param {string} agentId - Agent to route to (e.g., 'morpheus')
+     * @param {string} sessionId - Call ID from drachtio (used as ephemeral fallback key and in runId)
+     * @param {string} prompt - Transcribed user utterance
+     * @param {string|null} peerId - Caller phone number in E.164 format (e.g., '+15551234567')
+     * @param {object|null} identityContext - Identity resolution result: { isFirstCall, identity }
+     * @returns {Promise<string|null>} Agent text response, or null if no payloads
+     */
     const queryAgent = async (agentId, sessionId, prompt, peerId, identityContext) => {
       const ext = await getExtensionAPI();
       const ocConfig = api.config;
@@ -262,5 +277,8 @@ const plugin = {
 
 // Expose resolveSessionSuffix for test access (prefixed with _ to signal internal).
 plugin._resolveSessionSuffix = resolveSessionSuffix;
+
+// Test seam — allows unit tests to inject a mock extensionAPI without requiring ESM dynamic import.
+plugin._setExtensionAPIForTest = (mockApi) => { _extAPI = mockApi; };
 
 module.exports = plugin;
