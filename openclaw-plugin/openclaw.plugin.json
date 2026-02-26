@@ -4,6 +4,7 @@
   "name": "SIP Voice Channel",
   "description": "SIP telephone channel for OpenClaw agents via FreePBX",
   "main": "src/index.js",
+  "skills": ["./skills"],
   "configSchema": {
     "webhookPort": { "type": "number", "default": 47334 },
     "apiKey": { "type": "string" },
