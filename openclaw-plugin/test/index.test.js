@@ -223,6 +223,38 @@ test('index - start() includes account and binding counts in log data', async ()
 });
 
 // ---------------------------------------------------------------------------
+// Lifecycle: stop() after start() (Story 4.4 / AC1 / Task 5.2)
+// ---------------------------------------------------------------------------
+
+test('index - service.stop() calls server.close() after start() and is idempotent', async () => {
+  let closeCallCount = 0;
+  const origClose = _mockServerHandle.close;
+  _mockServerHandle.close = (cb) => {
+    closeCallCount++;
+    if (cb) cb();
+  };
+
+  try {
+    const plugin = requireIndex();
+    const api = createMockApi({ apiKey: 'test-key', accounts: [], bindings: [] });
+    plugin.register(api);
+    const service = api._calls.registerService[0];
+
+    await service.start();
+    assert.strictEqual(closeCallCount, 0, 'close() must not be called before stop()');
+
+    await service.stop();
+    assert.strictEqual(closeCallCount, 1, 'close() must be called exactly once on first stop()');
+
+    // Second stop() must be a no-op (_server was nulled)
+    await service.stop();
+    assert.strictEqual(closeCallCount, 1, 'close() must not be called again on second stop()');
+  } finally {
+    _mockServerHandle.close = origClose;
+  }
+});
+
+// ---------------------------------------------------------------------------
 // Error handling
 // ---------------------------------------------------------------------------
 

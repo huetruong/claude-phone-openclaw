@@ -85,7 +85,9 @@ async function handleInvite(req, res, options) {
     }
   }
 
-  console.log('[' + new Date().toISOString() + '] CALL Incoming from: ' + callerId + ' to ext: ' + (dialedExt || 'unknown'));
+  // PII discipline: callerId at DEBUG only (NFR-S3)
+  logger.debug('Incoming call details', { peerId: callerId, extension: dialedExt || 'unknown' });
+  logger.info('Incoming call', { extension: dialedExt || 'unknown' });
 
   // ── Caller allowlist check — reject BEFORE answering ──
   if (!checkAllowFrom(deviceConfig, callerId)) {
