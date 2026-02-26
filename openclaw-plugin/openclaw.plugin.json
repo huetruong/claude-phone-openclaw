@@ -7,6 +7,7 @@
   "configSchema": {
     "webhookPort": { "type": "number", "default": 47334 },
     "apiKey": { "type": "string" },
+    "voiceAppUrl": { "type": "string" },
     "dmPolicy": { "type": "string", "default": "allowlist" },
     "accounts": { "type": "array", "items": { "type": "object" } },
     "bindings": { "type": "array", "items": { "type": "object" } },
