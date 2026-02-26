@@ -631,3 +631,61 @@ test('webhook - startServer rejects when port is already in use', async () => {
     await new Promise((resolve) => server1.close(resolve));
   }
 });
+
+// ── Identity resolution integration (Story 5.2) ──────────────────────────────
+
+test('webhook - POST /voice/query passes identityContext to queryAgent when resolveIdentity provided', async () => {
+  const identityContexts = [];
+  const queryAgent = async (agentId, sessionId, prompt, peerId, identityContext) => {
+    identityContexts.push(identityContext);
+    return 'ok';
+  };
+  const resolveIdentity = () => ({ isFirstCall: false, identity: 'hue' });
+
+  await withServer(makeConfig({ queryAgent, resolveIdentity }), async (server) => {
+    await request(server, {
+      path: '/voice/query', method: 'POST', headers: AUTH
+    }, { prompt: 'hello', callId: 'uuid-id-test', accountId: 'morpheus', peerId: '+15551234567' });
+
+    assert.strictEqual(identityContexts.length, 1);
+    assert.deepStrictEqual(identityContexts[0], { isFirstCall: false, identity: 'hue' });
+  });
+});
+
+test('webhook - POST /voice/query uses default identityContext when resolveIdentity not configured', async () => {
+  const identityContexts = [];
+  const queryAgent = async (agentId, sessionId, prompt, peerId, identityContext) => {
+    identityContexts.push(identityContext);
+    return 'ok';
+  };
+
+  await withServer(makeConfig({ queryAgent }), async (server) => {
+    await request(server, {
+      path: '/voice/query', method: 'POST', headers: AUTH
+    }, { prompt: 'hello', callId: 'uuid-no-id', accountId: 'morpheus', peerId: '+15551234567' });
+
+    assert.strictEqual(identityContexts.length, 1);
+    assert.deepStrictEqual(identityContexts[0], { isFirstCall: true, identity: null },
+      'Default identityContext must indicate first call when resolveIdentity not configured');
+  });
+});
+
+test('webhook - POST /voice/query uses default identityContext when peerId is absent', async () => {
+  const identityContexts = [];
+  const queryAgent = async (agentId, sessionId, prompt, peerId, identityContext) => {
+    identityContexts.push(identityContext);
+    return 'ok';
+  };
+  const resolveIdentity = () => ({ isFirstCall: false, identity: 'hue' });
+
+  await withServer(makeConfig({ queryAgent, resolveIdentity }), async (server) => {
+    // No peerId in body — resolveIdentity must NOT be called
+    await request(server, {
+      path: '/voice/query', method: 'POST', headers: AUTH
+    }, { prompt: 'hello', callId: 'uuid-no-peer-id', accountId: 'morpheus' });
+
+    assert.strictEqual(identityContexts.length, 1);
+    assert.deepStrictEqual(identityContexts[0], { isFirstCall: true, identity: null },
+      'Must use default identityContext when peerId is absent (cannot resolve without phone number)');
+  });
+});
