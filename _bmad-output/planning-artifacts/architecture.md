@@ -144,7 +144,10 @@ On plugin startup: mark all non-terminal call state as ended (matches voice-call
 ```js
 module.exports = {
   async query(prompt, callId, deviceConfig) {
-    // returns { response: string }
+    // returns { response: string, isError: boolean }
+    // isError: true  → voice-app plays unavailability message and ends turn
+    // isError: false → voice-app renders response via TTS normally
+    // Note: updated in Story 4.3 from original { response: string }
   },
   async endSession(callId) {
     // returns void
@@ -259,6 +262,83 @@ try {
 ```
 
 Never let errors propagate uncaught in Express route handlers.
+
+### Dynamic Greeting Pattern (Epic 5 — FR34, FR35)
+
+**Current (pre-Epic 5):** Hardcoded `"Hello! I'm your server. How can I help you today?"` in `conversation-loop.js` line ~206.
+
+**Target:** Replace with initial bridge query so OpenClaw agent controls the greeting.
+
+```js
+// conversation-loop.js — inbound call startup (skipGreeting: false)
+if (!skipGreeting && callActive) {
+  const initialQuery = buildInitialQuery({ peerId, isFirstCall, identity });
+  musicPlaying = true;
+  loopHoldMusic();                                    // hold music while agent thinks
+  const result = await claudeBridge.query(initialQuery, { callId, ... signal });
+  musicPlaying = false;
+  await endpoint.api('uuid_break', endpoint.uuid).catch(() => {});
+  if (result.isError) {
+    // fallback to FALLBACK_GREETING env var or static default
+    const fallback = process.env.FALLBACK_GREETING || "Hello! How can I help you?";
+    const url = await ttsService.generateSpeech(fallback, voiceId);
+    if (callActive) await endpoint.play(url);
+  } else {
+    const url = await ttsService.generateSpeech(result.response, voiceId);
+    if (callActive) await endpoint.play(url);
+  }
+}
+```
+
+Initial query context passed to agent:
+- `isFirstCall: true/false` — whether this peerId exists in `session.identityLinks`
+- `identity: "<canonicalName>"` — resolved name if known, null if first call
+- `peerId: "<phoneNumber>"` — at DEBUG level only in plugin logs
+
+### Identity Enrollment Design (Epic 5 — FR36)
+
+**Plugin-side first-call detection:**
+
+```js
+// webhook-server.js POST /voice/query
+const { peerId } = req.body;
+const cfg = await api.runtime.config.loadConfig();
+const identity = resolveIdentity(cfg.session?.identityLinks, 'sip-voice', peerId);
+// Pass isFirstCall context to agent via the query context
+req.body.isFirstCall = !identity;
+req.body.identity = identity || null;
+```
+
+**`link_identity` tool (registered via `api.registerTool()`):**
+
+```js
+api.registerTool('link_identity', async ({ name, channels, peerId }) => {
+  // Serialize writes — prevent concurrent enrollment race condition
+  return await enrollmentMutex.run(async () => {
+    const cfg = await api.runtime.config.loadConfig();
+    cfg.session = cfg.session || {};
+    cfg.session.identityLinks = cfg.session.identityLinks || {};
+    cfg.session.identityLinks[name] = [
+      `sip-voice:${peerId}`,
+      ...(channels || [])
+    ];
+    await api.runtime.config.writeConfigFile(cfg);
+    logger.info('[sip-voice] identity enrolled', { name, channelCount: channels?.length || 0 });
+    return { ok: true, identity: name };
+  });
+});
+```
+
+**Identity model (two separate systems):**
+
+| System | Location | Purpose |
+|---|---|---|
+| `session.identityLinks` | `openclaw.json` (OpenClaw side) | Cross-channel session merging — same person on different channels shares one DM session per agent |
+| `identityLinks` in plugin config | `api.pluginConfig.identityLinks` | Outbound callback resolution — given canonical name, extract `sip-voice:` phone number |
+
+**Multi-user sharing:** Each person gets their own canonical identity. Separate private sessions per agent. Both can call the same extension — the agent knows who it's talking to and maintains separate context automatically.
+
+**Security boundary:** `allowFrom` in `devices.json` (voice-app side) remains the hard security gate. Dynamic enrollment only runs AFTER the phone number is already in the trusted allowlist.
 
 ### Enforcement
 
