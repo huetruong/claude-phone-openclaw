@@ -224,6 +224,7 @@ See `.env.example` for all variables. Key ones:
 | `OPENCLAW_WEBHOOK_URL` | voice-app | URL to openclaw-plugin webhook server |
 | `OPENCLAW_API_KEY` | voice-app | API key for webhook auth |
 | `CLAUDE_API_URL` | voice-app | URL to claude-api-server (when BRIDGE_TYPE=claude) |
+| `FALLBACK_GREETING` | voice-app | Static greeting fallback if agent query fails |
 | `ELEVENLABS_API_KEY` | voice-app | TTS API key |
 | `OPENAI_API_KEY` | voice-app | Whisper STT API key |
 | `SIP_DOMAIN` | voice-app | FreePBX server FQDN |
