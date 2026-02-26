@@ -65,7 +65,7 @@ function validateRequest(body) {
   }
 
   if (body.mode && !['announce', 'conversation'].includes(body.mode)) {
-    return { valid: false, error: 'Field "mode" must be either "announce" or "conversation"' };
+    return { valid: false, error: 'Field "mode" must be either "announce" or "conversation" (default: conversation)' };
   }
 
   if (body.device !== undefined && typeof body.device !== 'string') {
@@ -123,9 +123,10 @@ router.post('/outbound-call', async function(req, res) {
 
     // Extract parameters
     var to = req.body.to;
-    var message = req.body.message;
+    // Strip VOICE_RESPONSE prefix if agent accidentally includes it in outbound message
+    var message = req.body.message.replace(/^🗣️\s*VOICE_RESPONSE:\s*/i, '').trim();
     var context = req.body.context || null;  // NEW: structured context for Claude
-    var mode = req.body.mode || 'announce';
+    var mode = req.body.mode || 'conversation';
     var deviceParam = req.body.device;
     var callerId = req.body.callerId;
     var timeoutSeconds = req.body.timeoutSeconds || 30;

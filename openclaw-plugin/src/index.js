@@ -93,6 +93,16 @@ const plugin = {
       logger.warn('voiceAppUrl not configured — outbound calls will fail until set in plugin config');
     }
 
+    // Load SKILL.md for injection into agent context via extraSystemPrompt.
+    // This gives the agent awareness of the enrollment flow and voice response rules.
+    let skillPrompt = '';
+    try {
+      skillPrompt = fs.readFileSync(path.join(__dirname, '..', 'skills', 'SKILL.md'), 'utf8');
+      logger.info('SKILL.md loaded for agent context');
+    } catch (err) {
+      logger.warn('SKILL.md not found — agents will not have voice skill context');
+    }
+
     const pluginLinks = config.identityLinks || {};
     const linkCount = Object.keys(pluginLinks).length;
     if (linkCount > 0) {
@@ -105,7 +115,9 @@ const plugin = {
     // by linking their phone number to a canonical identity in openclaw.json.
     api.registerTool({
       name: 'link_identity',
-      schema: {
+      description: 'Enroll a caller by linking their phone number to a canonical identity name in the system',
+      label: 'Link Identity',
+      parameters: {
         type: 'object',
         properties: {
           name: { type: 'string', description: 'Canonical name for the caller (e.g., "hue")' },
@@ -118,14 +130,19 @@ const plugin = {
         },
         required: ['name', 'peerId'],
       },
-      handler: createLinkIdentityHandler(api),
+      execute: async (_toolCallId, params) => {
+        const r = await createLinkIdentityHandler(api)(params);
+        return { content: [{ type: 'text', text: JSON.stringify(r) }], details: r };
+      },
     });
 
     // Register place_call agent tool — allows agents to initiate outbound calls
     // via the voice-app REST API.
     api.registerTool({
       name: 'place_call',
-      schema: {
+      description: 'Initiate an outbound phone call via the SIP voice app',
+      label: 'Place Call',
+      parameters: {
         type: 'object',
         properties: {
           to: { type: 'string', description: 'Destination: phone number (E.164, e.g. "+15551234567"), extension (e.g. "9001"), or identity name (e.g. "operator")' },
@@ -139,7 +156,7 @@ const plugin = {
         },
         required: ['to', 'device', 'message'],
       },
-      handler: async ({ to, device, message, mode }) => {
+      execute: async (_toolCallId, { to, device, message, mode }) => {
         logger.info('place_call tool invoked', { device });
 
         // Resolve identity name to phone number if 'to' is not already a phone/extension.
@@ -153,7 +170,8 @@ const plugin = {
             resolvedTo = phone;
           } else {
             logger.warn('no SIP callback number for identity', { identity: to });
-            return { error: `no SIP callback number configured for identity '${to}'` };
+            const r = { error: `no SIP callback number configured for identity '${to}'` };
+            return { content: [{ type: 'text', text: JSON.stringify(r) }], details: r };
           }
         }
 
@@ -164,7 +182,7 @@ const plugin = {
         } else {
           logger.info('place_call succeeded', { callId: result.callId });
         }
-        return result;
+        return { content: [{ type: 'text', text: JSON.stringify(result) }], details: result };
       },
     });
 
@@ -192,7 +210,7 @@ const plugin = {
      * @param {object|null} identityContext - Identity resolution result: { isFirstCall, identity }
      * @returns {Promise<string|null>} Agent text response, or null if no payloads
      */
-    const queryAgent = async (agentId, sessionId, prompt, peerId, identityContext) => {
+    const queryAgent = async (agentId, sessionId, prompt, peerId, identityContext, device) => {
       const ext = await getExtensionAPI();
       const ocConfig = api.config;
 
@@ -205,14 +223,14 @@ const plugin = {
       if (identityContext) {
         let ctxLine;
         if (identityContext.isFirstCall) {
-          ctxLine = `[CALLER CONTEXT: First-time caller, no identity on file${peerId ? `, phone="${peerId}"` : ''}]`;
+          ctxLine = `[CALLER CONTEXT: First-time caller, no identity on file${peerId ? `, phone="${peerId}"` : ''}${device ? `, device="${device}"` : ''}]`;
         } else {
           // Resolve text channels for known callers to inform response medium selection.
           const userChannels = resolveUserChannels(config, ocConfig, identityContext.identity);
           const channelInfo = userChannels.length > 0
             ? `textChannels=${JSON.stringify(userChannels)}`
             : 'textChannels=none';
-          ctxLine = `[CALLER CONTEXT: Known caller, identity="${identityContext.identity}", ${channelInfo}]`;
+          ctxLine = `[CALLER CONTEXT: Known caller, identity="${identityContext.identity}", ${channelInfo}${peerId ? `, phone="${peerId}"` : ''}${device ? `, device="${device}"` : ''}]`;
         }
         enrichedPrompt = ctxLine + '\n' + prompt;
       }
@@ -237,6 +255,7 @@ const plugin = {
         runId: `sip:${sessionId}:${Date.now()}`,
         lane: 'voice',
         agentDir,
+        extraSystemPrompt: skillPrompt || undefined,
       });
 
       // Concatenate non-error text payloads into a single response string.

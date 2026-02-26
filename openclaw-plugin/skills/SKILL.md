@@ -20,8 +20,8 @@ Initiates an outbound phone call via the voice-app.
 
 ### Modes
 
-- **`announce`** — One-way notification. The called party hears the message and the call ends. Use for task completion callbacks, alerts, and status updates.
-- **`conversation`** — Two-way call. The called party can speak back. Use for complex discussions, decisions that need input, or follow-up Q&A.
+- **`conversation`** — **(default)** Two-way call. The called party can speak back. Use this for all user-initiated "call me back" requests — they may want to ask follow-up questions, give more instructions, or continue the conversation.
+- **`announce`** — One-way notification. The called party hears the message and the call ends. Only use this when explicitly asked for a one-way notification (e.g. "just leave me a message", "send me an alert").
 
 ### Return value
 
@@ -168,6 +168,97 @@ The server is healthy. CPU at 12%, memory at 45%.
 ```
 🗣️ VOICE_RESPONSE: Your research task is done. I found 3 relevant papers. I can't send the details since you don't have a text channel linked — say "link identity" to add Discord or another channel.
 ```
+
+---
+
+## Async Task Pattern (Voice)
+
+Voice queries have a 90-second limit. For tasks that take longer, or when the caller says
+"call me when done" / "call me with the result" / "call me back", use the async pattern:
+
+### Before dispatching — resolve ambiguity first
+
+If you need more information to complete the task, **ask on the inbound call** before dispatching.
+Do not call back to ask follow-up questions that could have been resolved upfront.
+
+Examples:
+- *"Call me with the weather"* → Which city? Ask now if unclear.
+- *"Call me when the task is done"* → Which task? Confirm before hanging up.
+- *"Call me in a bit"* → Anything else you need from them? Ask now.
+
+Once you have everything you need, dispatch immediately.
+
+### Dispatch pattern
+
+1. Launch the work as a background process with `nohup ... &` so the exec returns immediately.
+2. **Stay on the inbound call.** Confirm the task is queued and ask if there's anything else:
+   *"Got it — I've queued that up and I'll call you right back with the result. Is there anything else while I have you?"*
+3. Let the caller finish. When they're done, say goodbye — **include "bye"** to trigger hangup.
+4. The background process calls back in conversation mode so they can ask follow-ups.
+
+**Do not say "bye" immediately after dispatching.** Stay on the call, confirm, and ask "anything else?" first.
+Only say "bye" once the caller is actually ready to hang up.
+
+### Timing variants
+
+| What the caller says | What to do |
+|---|---|
+| "call me back" / "call me right away" | Dispatch nohup immediately, no sleep |
+| "call me in 5 minutes" | Add `sleep 300` before the work in the nohup script |
+| "call me in an hour" | Add `sleep 3600` before the work |
+| "call me when done" | Dispatch immediately, work runs first, then callback |
+
+### Background script template
+
+```bash
+# Read plugin config to get voiceAppUrl and apiKey
+VOICE_APP_URL=$(python3 -c "import json; c=json.load(open('/home/dewey/.openclaw/openclaw.json')); p=c['plugins']['entries']['openclaw-sip-voice']['config']; print(p['voiceAppUrl'])")
+API_KEY=$(python3 -c "import json; c=json.load(open('/home/dewey/.openclaw/openclaw.json')); p=c['plugins']['entries']['openclaw-sip-voice']['config']; print(p['apiKey'])")
+
+# Build the work + callback script
+nohup bash -c "
+  RESULT=\$(... your command here ...)
+  curl -s -X POST \$VOICE_APP_URL/api/outbound-call \
+    -H 'Content-Type: application/json' \
+    -H \"Authorization: Bearer \$API_KEY\" \
+    -d \"{\\\"to\\\": \\\"CALLER_PHONE\\\", \\\"device\\\": \\\"DEVICE\\\", \\\"message\\\": \\\"\$RESULT\\\"}\"
+" > /tmp/voice-callback-\$(date +%s).log 2>&1 &
+```
+
+Replace `CALLER_PHONE` with the `phone` value from `[CALLER CONTEXT]`.
+Replace `DEVICE` with the `device` value from `[CALLER CONTEXT]` (e.g. `9000`).
+
+**Important:** The `to` field in the background script must be a phone number (E.164 format like `+15551234567`),
+NOT an identity name like `"alice"`. The voice-app outbound API does not resolve identity names.
+Always use the `phone` value from `[CALLER CONTEXT: First-time caller ... phone="..."]` or the
+phone number you stored when enrolling via `link_identity`.
+
+### When to use this pattern
+
+| Situation | Pattern |
+|-----------|---------|
+| "How's the weather?" (can answer in < 90s) | Inline — fetch and speak the result |
+| "Research X and call me when done" | Async — launch background job, call back |
+| "Call me in 10 minutes" | Async — use `sleep 600` in background script |
+| "Check the server and call me" | Async — run check, call back with result |
+
+### Example: "call me with the weather"
+
+```bash
+nohup bash -c '
+  WEATHER=$(curl -s "https://api.open-meteo.com/v1/forecast?latitude=34.05&longitude=-118.24&current=temperature_2m,weather_code&temperature_unit=fahrenheit&forecast_days=1" | python3 -c "import json,sys; d=json.load(sys.stdin); c=d[\"current\"]; print(f\"{c[\"temperature_2m\"]}F\")")
+  VOICE_APP_URL=$(python3 -c "import json; c=json.load(open(\"/home/dewey/.openclaw/openclaw.json\")); print(c[\"plugins\"][\"entries\"][\"openclaw-sip-voice\"][\"config\"][\"voiceAppUrl\"])")
+  API_KEY=$(python3 -c "import json; c=json.load(open(\"/home/dewey/.openclaw/openclaw.json\")); print(c[\"plugins\"][\"entries\"][\"openclaw-sip-voice\"][\"config\"][\"apiKey\"])")
+  curl -s -X POST "$VOICE_APP_URL/api/outbound-call" \
+    -H "Content-Type: application/json" \
+    -H "Authorization: Bearer $API_KEY" \
+    -d "{\"to\": \"+15551234567\", \"device\": \"9000\", \"message\": \"Hey, here's the New York weather: $WEATHER. Anything else you need?\"}"
+' > /tmp/voice-cb-weather.log 2>&1 &
+```
+
+Then respond to the caller: *"I'll grab the weather and ring you right back — bye for now!"*
+
+**Always include "bye" or "goodbye"** when dispatching a callback — the voice-app detects it and hangs up automatically so the caller doesn't have to wait on the line.
 
 ---
 

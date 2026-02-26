@@ -150,7 +150,7 @@ describe('dynamic-greeting: successful bridge query plays agent greeting', () =>
 
   it('TTS-renders the agent greeting response', async () => {
     const mocks = buildMocks({
-      greetingQuery: () => Promise.resolve({ response: 'Hey Hue, welcome back!', isError: false })
+      greetingQuery: () => Promise.resolve({ response: 'Hey Alice, welcome back!', isError: false })
     });
 
     await runConversationLoop(
@@ -158,8 +158,10 @@ describe('dynamic-greeting: successful bridge query plays agent greeting', () =>
       mocks.defaultOptions
     );
 
+    // extractVoiceLine splits on sentence-ending punctuation (first-sentence fallback),
+    // so the trailing '!' is consumed as the delimiter — TTS receives the trimmed sentence.
     assert.ok(
-      mocks.calls.ttsTexts.includes('Hey Hue, welcome back!'),
+      mocks.calls.ttsTexts.includes('Hey Alice, welcome back'),
       'agent greeting response must be TTS-rendered'
     );
   });
