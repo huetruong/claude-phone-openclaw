@@ -14,6 +14,9 @@
 
 const logger = require('./logger');
 
+// Env-var-derived config (read at module load)
+const FALLBACK_GREETING = process.env.FALLBACK_GREETING || 'Hello! How can I help you?';
+
 // Audio cue URLs
 const READY_BEEP_URL = 'http://127.0.0.1:3000/static/ready-beep.wav';
 const GOTIT_BEEP_URL = 'http://127.0.0.1:3000/static/gotit-beep.wav';
@@ -124,6 +127,16 @@ function extractVoiceLine(response) {
 }
 
 /**
+ * Build the initial greeting query prompt.
+ * The plugin (Story 5.2) will prepend [CALLER CONTEXT: ...] with identity info.
+ * This query just tells the agent to generate a greeting.
+ * @returns {string} Prompt string for the initial bridge query
+ */
+function buildInitialQuery() {
+  return '[INITIAL GREETING REQUEST]: You are answering an inbound phone call. Generate a natural, friendly greeting for the caller. If you know who they are, greet them by name and briefly reference your last conversation if relevant. If this is a first-time caller, introduce yourself warmly. Keep it concise — this is a voice greeting, not a text response.';
+}
+
+/**
  * Check if caller is allowed by device's allowFrom list.
  * Returns true if:
  * - deviceConfig is null/undefined (no device = no restriction)
@@ -202,11 +215,62 @@ async function runConversationLoop(endpoint, dialog, callUuid, options) {
 
     // Play greeting (skip for outbound where initial message already played)
     if (!skipGreeting && callActive) {
-      const greetingUrl = await ttsService.generateSpeech(
-        "Hello! I'm your server. How can I help you today?",
-        voiceId
-      );
-      await endpoint.play(greetingUrl);
+      const initialQuery = buildInitialQuery();
+
+      // Hold music while agent generates greeting
+      let greetingMusicPlaying = true;
+      const loopGreetingMusic = () => {
+        if (!greetingMusicPlaying || !callActive) return;
+        endpoint.play(HOLD_MUSIC_URL)
+          .then(() => setImmediate(loopGreetingMusic))
+          .catch((e) => { logger.warn('Greeting hold music error', { callUuid, error: e.message }); });
+      };
+      loopGreetingMusic();
+
+      // AbortController for hangup-during-greeting
+      const greetingController = new AbortController();
+      const onGreetingDestroy = () => greetingController.abort();
+      dialog.on('destroy', onGreetingDestroy);
+
+      let greetingText;
+      try {
+        const result = await claudeBridge.query(initialQuery, {
+          callId: callUuid,
+          devicePrompt,
+          accountId: deviceConfig?.accountId,
+          peerId,
+          signal: greetingController.signal
+        });
+
+        if (result && !result.isError && result.response) {
+          greetingText = result.response;
+        } else {
+          greetingText = FALLBACK_GREETING;
+        }
+      } catch (err) {
+        if (err.code === 'ERR_CANCELED' || err.name === 'CanceledError') {
+          greetingMusicPlaying = false;
+          dialog.off('destroy', onGreetingDestroy);
+          // Stop hold music before exiting — mirrors the main loop's abort path
+          endpoint.api('uuid_break', endpoint.uuid).catch(() => {});
+          return; // Caller hung up during greeting — exit cleanly
+        }
+        logger.warn('Initial greeting query failed', { callUuid, error: err.message });
+        greetingText = FALLBACK_GREETING;
+      }
+
+      // Stop hold music
+      greetingMusicPlaying = false;
+      dialog.off('destroy', onGreetingDestroy);
+      if (callActive) {
+        await endpoint.api('uuid_break', endpoint.uuid).catch(() => {});
+      }
+
+      // Play greeting via TTS
+      if (callActive) {
+        const greetingUrl = await ttsService.generateSpeech(greetingText, voiceId);
+        if (callActive) await endpoint.play(greetingUrl);
+      }
     }
 
     // Prime Claude with context if this is an outbound call (NON-BLOCKING)
@@ -535,7 +599,9 @@ module.exports = {
   isGoodbye,
   getRandomThinkingPhrase,
   getUnavailabilityUrl,
+  buildInitialQuery,
   READY_BEEP_URL,
   GOTIT_BEEP_URL,
-  HOLD_MUSIC_URL
+  HOLD_MUSIC_URL,
+  FALLBACK_GREETING
 };

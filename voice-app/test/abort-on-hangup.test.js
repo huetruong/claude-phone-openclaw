@@ -143,7 +143,8 @@ describe('abort-on-hangup: conversation loop abort', () => {
         ttsService: mockTtsService,
         wsPort: 8080,
         deviceConfig: null,
-        peerId: null
+        peerId: null,
+        skipGreeting: true
       }
     );
 
@@ -164,7 +165,8 @@ describe('abort-on-hangup: conversation loop abort', () => {
         ttsService: mockTtsService,
         wsPort: 8080,
         deviceConfig: null,
-        peerId: null
+        peerId: null,
+        skipGreeting: true
       }
     );
 
@@ -186,7 +188,8 @@ describe('abort-on-hangup: conversation loop abort', () => {
         ttsService: mockTtsService,
         wsPort: 8080,
         deviceConfig: null,
-        peerId: null
+        peerId: null,
+        skipGreeting: true
       }
     );
 
@@ -250,7 +253,8 @@ describe('abort-on-hangup: conversation loop abort', () => {
         ttsService: mockTtsService,
         wsPort: 8080,
         deviceConfig: null,
-        peerId: null
+        peerId: null,
+        skipGreeting: true
       }
     );
 

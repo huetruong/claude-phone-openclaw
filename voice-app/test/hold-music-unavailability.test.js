@@ -116,7 +116,7 @@ describe('hold-music: starts on query dispatch and stops on response', () => {
         whisperClient: mocks.mockWhisperClient,
         claudeBridge: mocks.mockBridge,
         ttsService: mocks.mockTtsService,
-        wsPort: 8080, deviceConfig: null, peerId: null, maxTurns: 1
+        wsPort: 8080, deviceConfig: null, peerId: null, maxTurns: 1, skipGreeting: true
       }
     );
 
@@ -152,7 +152,7 @@ describe('hold-music: starts on query dispatch and stops on response', () => {
         whisperClient: mocks.mockWhisperClient,
         claudeBridge: mocks.mockBridge,
         ttsService: mocks.mockTtsService,
-        wsPort: 8080, deviceConfig: null, peerId: null, maxTurns: 1
+        wsPort: 8080, deviceConfig: null, peerId: null, maxTurns: 1, skipGreeting: true
       }
     );
 
@@ -183,7 +183,7 @@ describe('hold-music: starts on query dispatch and stops on response', () => {
         whisperClient: mocks.mockWhisperClient,
         claudeBridge: mocks.mockBridge,
         ttsService: mocks.mockTtsService,
-        wsPort: 8080, deviceConfig: null, peerId: null, maxTurns: 1
+        wsPort: 8080, deviceConfig: null, peerId: null, maxTurns: 1, skipGreeting: true
       }
     );
 
@@ -213,7 +213,7 @@ describe('hold-music: starts on query dispatch and stops on response', () => {
         whisperClient: mocks.mockWhisperClient,
         claudeBridge: mocks.mockBridge,
         ttsService: mocks.mockTtsService,
-        wsPort: 8080, deviceConfig: null, peerId: null, maxTurns: 1
+        wsPort: 8080, deviceConfig: null, peerId: null, maxTurns: 1, skipGreeting: true
       }
     );
 
@@ -257,7 +257,7 @@ describe('unavailability-message: plays on bridge isError response', () => {
         whisperClient: mocks.mockWhisperClient,
         claudeBridge: mocks.mockBridge,
         ttsService: mocks.mockTtsService,
-        wsPort: 8080, deviceConfig: null, peerId: null, maxTurns: 1
+        wsPort: 8080, deviceConfig: null, peerId: null, maxTurns: 1, skipGreeting: true
       }
     );
 
@@ -287,7 +287,7 @@ describe('unavailability-message: plays on bridge isError response', () => {
         whisperClient: mocks.mockWhisperClient,
         claudeBridge: mocks.mockBridge,
         ttsService: mocks.mockTtsService,
-        wsPort: 8080, deviceConfig: null, peerId: null, maxTurns: 1
+        wsPort: 8080, deviceConfig: null, peerId: null, maxTurns: 1, skipGreeting: true
       }
     );
 
@@ -318,7 +318,7 @@ describe('unavailability-message: plays on bridge isError response', () => {
         whisperClient: mocks.mockWhisperClient,
         claudeBridge: mocks.mockBridge,
         ttsService: mocks.mockTtsService,
-        wsPort: 8080, deviceConfig: null, peerId: null, maxTurns: 1
+        wsPort: 8080, deviceConfig: null, peerId: null, maxTurns: 1, skipGreeting: true
       }
     );
 
@@ -343,7 +343,7 @@ describe('unavailability-message: plays on bridge isError response', () => {
         whisperClient: mocks.mockWhisperClient,
         claudeBridge: mocks.mockBridge,
         ttsService: mocks.mockTtsService,
-        wsPort: 8080, deviceConfig: null, peerId: null, maxTurns: 5
+        wsPort: 8080, deviceConfig: null, peerId: null, maxTurns: 5, skipGreeting: true
       }
     );
 
