@@ -96,9 +96,13 @@ async function handleInvite(req, res, options) {
     logger.info(`[sip-voice] call rejected: unknown caller on extension ${deviceConfig?.extension}`);
     logger.debug('Rejected caller details', { peerId: callerId });
     try {
-      const rejectDialog = await srf.createUAS(req, res, { localSdp: req.body });
-      rejectDialog.destroy();
-    } catch (e) { /* ignore */ }
+      const audioOnlySdp = stripVideoFromSdp(req.body);
+      const result = await mediaServer.connectCaller(req, res, { remoteSdp: audioOnlySdp });
+      result.dialog.destroy();
+    } catch (e) {
+      logger.debug('Reject connectCaller failed, falling back to 603', { error: e.message });
+      try { res.send(603); } catch (_) { /* ignore */ }
+    }
     return;
   }
 
