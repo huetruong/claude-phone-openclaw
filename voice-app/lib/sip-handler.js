@@ -93,7 +93,7 @@ async function handleInvite(req, res, options) {
   if (!checkAllowFrom(deviceConfig, callerId)) {
     logger.info(`[sip-voice] call rejected: unknown caller on extension ${deviceConfig?.extension}`);
     logger.debug('Rejected caller details', { peerId: callerId });
-    res.send(603);
+    res.send(403);
     return;
   }
 
