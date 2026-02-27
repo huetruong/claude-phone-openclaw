@@ -283,6 +283,7 @@ export async function startContainers() {
   return new Promise((resolve, reject) => {
     const child = spawn(compose.cmd, composeArgs, {
       cwd: configDir,
+      env: { ...process.env, DOCKER_BUILDKIT: '0' },
       stdio: 'pipe'
     });
 
@@ -337,6 +338,7 @@ export async function stopContainers() {
   return new Promise((resolve, reject) => {
     const child = spawn(compose.cmd, composeArgs, {
       cwd: configDir,
+      env: { ...process.env, DOCKER_BUILDKIT: '0' },
       stdio: 'pipe'
     });
 
