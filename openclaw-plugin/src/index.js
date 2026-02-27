@@ -71,6 +71,7 @@ function resolveSessionSuffix(identityContext, peerId, callId) {
 }
 
 let _server = null;
+let _skillPrompt = '';
 
 const plugin = {
   id: 'openclaw-sip-voice',
@@ -91,16 +92,6 @@ const plugin = {
     const voiceAppUrl = config.voiceAppUrl || null;
     if (!voiceAppUrl) {
       logger.warn('voiceAppUrl not configured — outbound calls will fail until set in plugin config');
-    }
-
-    // Load SKILL.md for injection into agent context via extraSystemPrompt.
-    // This gives the agent awareness of the enrollment flow and voice response rules.
-    let skillPrompt = '';
-    try {
-      skillPrompt = fs.readFileSync(path.join(__dirname, '..', 'skills', 'SKILL.md'), 'utf8');
-      logger.info('SKILL.md loaded for agent context');
-    } catch (err) {
-      logger.warn('SKILL.md not found — agents will not have voice skill context');
     }
 
     const pluginLinks = config.identityLinks || {};
@@ -255,7 +246,7 @@ const plugin = {
         runId: `sip:${sessionId}:${Date.now()}`,
         lane: 'voice',
         agentDir,
-        extraSystemPrompt: skillPrompt || undefined,
+        extraSystemPrompt: _skillPrompt || undefined,
       });
 
       // Concatenate non-error text payloads into a single response string.
@@ -277,6 +268,13 @@ const plugin = {
       id: 'sip-voice-webhook',
 
       start: async () => {
+        if (_server) return;
+        try {
+          _skillPrompt = fs.readFileSync(path.join(__dirname, '..', 'skills', 'SKILL.md'), 'utf8');
+          logger.info('SKILL.md loaded for agent context');
+        } catch (err) {
+          logger.warn('SKILL.md not found — agents will not have voice skill context');
+        }
         logger.info(`loaded ${bindings.length} account bindings`, {
           accounts: accounts.length,
           bindings: bindings.length,
