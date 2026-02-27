@@ -114,7 +114,7 @@ N/A — implementation was straightforward per story spec with no blocking issue
 
 ### File List
 
-- `voice-app/lib/conversation-loop.js` — added `shouldAllowCaller()`, updated rejection block, added export
+- `voice-app/lib/conversation-loop.js` — updated rejection block log format
 - `voice-app/test/caller-allowlist.test.js` — added 6 new tests (5 unit + 1 integration) for Story 3.2
 
 ## Change Log
