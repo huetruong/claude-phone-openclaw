@@ -296,19 +296,19 @@ test('index - link_identity tool has a schema with required name and peerId', ()
   plugin.register(api);
   const tool = api._calls.registerTool.find(t => t.name === 'link_identity');
   assert.ok(tool, 'link_identity tool must be registered');
-  assert.ok(tool.schema, 'tool must have a schema');
-  assert.ok(Array.isArray(tool.schema.required), 'schema.required must be an array');
-  assert.ok(tool.schema.required.includes('name'), 'schema must require name');
-  assert.ok(tool.schema.required.includes('peerId'), 'schema must require peerId');
+  assert.ok(tool.parameters, 'tool must have a parameters schema');
+  assert.ok(Array.isArray(tool.parameters.required), 'parameters.required must be an array');
+  assert.ok(tool.parameters.required.includes('name'), 'parameters must require name');
+  assert.ok(tool.parameters.required.includes('peerId'), 'parameters must require peerId');
 });
 
-test('index - link_identity tool has an async handler function', () => {
+test('index - link_identity tool has an async execute function', () => {
   const plugin = requireIndex();
   const api = createMockApi({ accounts: [], bindings: [] });
   plugin.register(api);
   const tool = api._calls.registerTool.find(t => t.name === 'link_identity');
   assert.ok(tool, 'link_identity tool must be registered');
-  assert.strictEqual(typeof tool.handler, 'function', 'tool must have a handler function');
+  assert.strictEqual(typeof tool.execute, 'function', 'tool must have an execute function');
 });
 
 test('index - register() still calls api.registerService() exactly once alongside registerTool', () => {
@@ -337,20 +337,20 @@ test('index - place_call tool has schema with required to, device, and message',
   plugin.register(api);
   const tool = api._calls.registerTool.find(t => t.name === 'place_call');
   assert.ok(tool, 'place_call tool must be registered');
-  assert.ok(tool.schema, 'tool must have a schema');
-  assert.ok(Array.isArray(tool.schema.required), 'schema.required must be an array');
-  assert.ok(tool.schema.required.includes('to'), 'schema must require to');
-  assert.ok(tool.schema.required.includes('device'), 'schema must require device');
-  assert.ok(tool.schema.required.includes('message'), 'schema must require message');
+  assert.ok(tool.parameters, 'tool must have a parameters schema');
+  assert.ok(Array.isArray(tool.parameters.required), 'parameters.required must be an array');
+  assert.ok(tool.parameters.required.includes('to'), 'parameters must require to');
+  assert.ok(tool.parameters.required.includes('device'), 'parameters must require device');
+  assert.ok(tool.parameters.required.includes('message'), 'parameters must require message');
 });
 
-test('index - place_call tool has an async handler function', () => {
+test('index - place_call tool has an async execute function', () => {
   const plugin = requireIndex();
   const api = createMockApi({ accounts: [], bindings: [] });
   plugin.register(api);
   const tool = api._calls.registerTool.find(t => t.name === 'place_call');
   assert.ok(tool, 'place_call tool must be registered');
-  assert.strictEqual(typeof tool.handler, 'function', 'tool must have a handler function');
+  assert.strictEqual(typeof tool.execute, 'function', 'tool must have an execute function');
 });
 
 test('index - register() calls api.registerTool() exactly 2 times (link_identity + place_call)', () => {
@@ -614,13 +614,13 @@ test('manifest - openclaw.plugin.json contains skills field pointing to ./skills
 
 test('index - queryAgent (Task 5.1): known caller with channels includes textChannels in enriched prompt', async () => {
   const { capturedQueryAgent, runCalls, cleanup } = await setupQueryAgentEnv({
-    pluginConfig: { identityLinks: { hue: ['sip-voice:15551234567', 'discord:987654321'] } },
+    pluginConfig: { identityLinks: { alice: ['sip-voice:15551234567', 'discord:987654321'] } },
   });
   try {
-    await capturedQueryAgent('morpheus', 'call-uuid-c1', 'hello', '+15551234567', { identity: 'hue', isFirstCall: false });
+    await capturedQueryAgent('morpheus', 'call-uuid-c1', 'hello', '+15551234567', { identity: 'alice', isFirstCall: false });
     assert.strictEqual(runCalls.length, 1, 'runEmbeddedPiAgent must be called once');
     const prompt = runCalls[0].prompt;
-    const expectedCtx = '[CALLER CONTEXT: Known caller, identity="hue", textChannels=["discord:987654321"]]';
+    const expectedCtx = '[CALLER CONTEXT: Known caller, identity="alice", textChannels=["discord:987654321"], phone="+15551234567"]';
     assert.ok(
       prompt.startsWith(expectedCtx),
       `enriched prompt must start with exact CALLER CONTEXT line, got: ${prompt}`
@@ -632,12 +632,12 @@ test('index - queryAgent (Task 5.1): known caller with channels includes textCha
 
 test('index - queryAgent (Task 5.2): known caller with NO channels includes textChannels=none in enriched prompt', async () => {
   const { capturedQueryAgent, runCalls, cleanup } = await setupQueryAgentEnv({
-    pluginConfig: { identityLinks: { hue: ['sip-voice:15551234567'] } },
+    pluginConfig: { identityLinks: { alice: ['sip-voice:15551234567'] } },
   });
   try {
-    await capturedQueryAgent('morpheus', 'call-uuid-c2', 'hello', '+15551234567', { identity: 'hue', isFirstCall: false });
+    await capturedQueryAgent('morpheus', 'call-uuid-c2', 'hello', '+15551234567', { identity: 'alice', isFirstCall: false });
     const prompt = runCalls[0].prompt;
-    const expectedCtx = '[CALLER CONTEXT: Known caller, identity="hue", textChannels=none]';
+    const expectedCtx = '[CALLER CONTEXT: Known caller, identity="alice", textChannels=none, phone="+15551234567"]';
     assert.ok(
       prompt.startsWith(expectedCtx),
       `enriched prompt must start with exact CALLER CONTEXT line, got: ${prompt}`

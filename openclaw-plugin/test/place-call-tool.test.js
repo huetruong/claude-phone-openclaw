@@ -68,8 +68,14 @@ function getPlaceCallTool(api) {
   return api._calls.registerTool.find(t => t.name === 'place_call');
 }
 
+// Invoke a tool and return result.details (unwraps AgentToolResult wrapper).
+async function invokeTool(tool, params) {
+  const result = await tool.execute(null, params);
+  return result.details;
+}
+
 // ---------------------------------------------------------------------------
-// place_call handler — delegation to outboundClient.placeCall()
+// place_call execute — delegation to outboundClient.placeCall()
 // ---------------------------------------------------------------------------
 
 test('place_call - handler delegates to outboundClient.placeCall() with correct params', async () => {
@@ -81,7 +87,7 @@ test('place_call - handler delegates to outboundClient.placeCall() with correct 
   plugin.register(api);
   const tool = getPlaceCallTool(api);
 
-  await tool.handler({ to: '+15551234567', device: '9000', message: 'Hello world', mode: 'announce' });
+  await invokeTool(tool,{ to: '+15551234567', device: '9000', message: 'Hello world', mode: 'announce' });
 
   assert.ok(lastPlaceCallArgs, 'outboundClient.placeCall must be called');
   assert.strictEqual(lastPlaceCallArgs.to, '+15551234567');
@@ -98,7 +104,7 @@ test('place_call - handler returns { callId, status } on success', async () => {
   plugin.register(api);
   const tool = getPlaceCallTool(api);
 
-  const result = await tool.handler({ to: '+15551234567', device: '9000', message: 'Test message' });
+  const result = await invokeTool(tool,{ to: '+15551234567', device: '9000', message: 'Test message' });
 
   assert.deepStrictEqual(result, { callId: 'call-xyz', status: 'initiated' });
 });
@@ -111,7 +117,7 @@ test('place_call - handler returns { error } when voice-app unreachable', async 
   plugin.register(api);
   const tool = getPlaceCallTool(api);
 
-  const result = await tool.handler({ to: '+15551234567', device: '9000', message: 'Test' });
+  const result = await invokeTool(tool,{ to: '+15551234567', device: '9000', message: 'Test' });
 
   assert.ok(result.error, 'Must return error object on failure');
   assert.strictEqual(result.error, 'Voice app unreachable');
@@ -126,7 +132,7 @@ test('place_call - handler passes voiceAppUrl from plugin config', async () => {
   plugin.register(api);
   const tool = getPlaceCallTool(api);
 
-  await tool.handler({ to: '+15559876543', device: '9001', message: 'Hi there' });
+  await invokeTool(tool,{ to: '+15559876543', device: '9001', message: 'Hi there' });
 
   assert.strictEqual(lastPlaceCallArgs.voiceAppUrl, 'http://my-voice-app:4000');
 });
@@ -140,7 +146,7 @@ test('place_call - handler passes null voiceAppUrl when not configured', async (
   plugin.register(api);
   const tool = getPlaceCallTool(api);
 
-  const result = await tool.handler({ to: '+15551234567', device: '9000', message: 'Test' });
+  const result = await invokeTool(tool,{ to: '+15551234567', device: '9000', message: 'Test' });
 
   assert.ok(lastPlaceCallArgs, 'outboundClient.placeCall must be called even when voiceAppUrl is null');
   assert.strictEqual(lastPlaceCallArgs.voiceAppUrl, null, 'voiceAppUrl should be null when not configured');
@@ -156,7 +162,7 @@ test('place_call - handler works when mode is omitted (passes undefined, outboun
   plugin.register(api);
   const tool = getPlaceCallTool(api);
 
-  const result = await tool.handler({ to: '+15551234567', device: '9000', message: 'No mode specified' });
+  const result = await invokeTool(tool,{ to: '+15551234567', device: '9000', message: 'No mode specified' });
 
   assert.ok(lastPlaceCallArgs, 'outboundClient.placeCall must be called');
   assert.strictEqual(lastPlaceCallArgs.mode, undefined, 'mode should be undefined when not provided');
@@ -164,7 +170,7 @@ test('place_call - handler works when mode is omitted (passes undefined, outboun
 });
 
 // ---------------------------------------------------------------------------
-// place_call handler — identity name resolution
+// place_call execute — identity name resolution
 // ---------------------------------------------------------------------------
 
 test('place_call - identity name in plugin config resolves to phone number', async () => {
@@ -181,7 +187,7 @@ test('place_call - identity name in plugin config resolves to phone number', asy
   plugin.register(api);
   const tool = getPlaceCallTool(api);
 
-  const result = await tool.handler({ to: 'operator', device: '9000', message: 'Task done' });
+  const result = await invokeTool(tool,{ to: 'operator', device: '9000', message: 'Task done' });
 
   assert.ok(lastPlaceCallArgs, 'outboundClient.placeCall must be called');
   assert.strictEqual(lastPlaceCallArgs.to, '+15551234567', 'must resolve identity to phone number');
@@ -197,7 +203,7 @@ test('place_call - identity name not found returns error without calling outboun
   plugin.register(api);
   const tool = getPlaceCallTool(api);
 
-  const result = await tool.handler({ to: 'unknown', device: '9000', message: 'Test' });
+  const result = await invokeTool(tool,{ to: 'unknown', device: '9000', message: 'Test' });
 
   assert.strictEqual(lastPlaceCallArgs, null, 'outboundClient.placeCall must NOT be called');
   assert.ok(result.error, 'must return error');
@@ -213,7 +219,7 @@ test('place_call - to as phone number (+15551234567) passes through unchanged', 
   plugin.register(api);
   const tool = getPlaceCallTool(api);
 
-  await tool.handler({ to: '+15551234567', device: '9000', message: 'Hi' });
+  await invokeTool(tool,{ to: '+15551234567', device: '9000', message: 'Hi' });
 
   assert.strictEqual(lastPlaceCallArgs.to, '+15551234567', 'phone number must pass through unchanged');
 });
@@ -227,7 +233,7 @@ test('place_call - to as extension (9001) passes through unchanged', async () =>
   plugin.register(api);
   const tool = getPlaceCallTool(api);
 
-  await tool.handler({ to: '9001', device: '9000', message: 'Hi' });
+  await invokeTool(tool,{ to: '9001', device: '9000', message: 'Hi' });
 
   assert.strictEqual(lastPlaceCallArgs.to, '9001', 'extension must pass through unchanged');
 });
@@ -239,11 +245,11 @@ test('place_call - identity name in session config resolves to phone number', as
   const plugin = requireIndex();
   const api = createMockApi({ voiceAppUrl: 'http://voice-app:3000', accounts: [], bindings: [] });
   // Use format without '+' — matches what link_identity actually stores (strips leading +)
-  api.config = { session: { identityLinks: { hue: ['sip-voice:15559876543'] } } };
+  api.config = { session: { identityLinks: { alice: ['sip-voice:15559876543'] } } };
   plugin.register(api);
   const tool = getPlaceCallTool(api);
 
-  const result = await tool.handler({ to: 'hue', device: '9000', message: 'Task done' });
+  const result = await invokeTool(tool,{ to: 'alice', device: '9000', message: 'Task done' });
 
   assert.ok(lastPlaceCallArgs, 'outboundClient.placeCall must be called');
   assert.strictEqual(lastPlaceCallArgs.to, '15559876543', 'must resolve identity from session config');
@@ -265,7 +271,7 @@ test('place_call startup - logs identity link count when identityLinks configure
       voiceAppUrl: 'http://voice-app:3000',
       accounts: [],
       bindings: [],
-      identityLinks: { operator: ['sip-voice:+15551234567'], hue: ['sip-voice:15559876543'] },
+      identityLinks: { operator: ['sip-voice:+15551234567'], alice: ['sip-voice:15559876543'] },
     });
     plugin.register(api);
   } finally {

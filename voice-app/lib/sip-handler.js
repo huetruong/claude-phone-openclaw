@@ -78,9 +78,9 @@ async function handleInvite(req, res, options) {
   if (deviceRegistry && dialedExt) {
     deviceConfig = deviceRegistry.get(dialedExt);
     if (deviceConfig) {
-      console.log('[' + new Date().toISOString() + '] CALL Device matched: ' + deviceConfig.name + ' (ext ' + dialedExt + ')');
+      logger.info('Device matched', { device: deviceConfig.name, extension: dialedExt });
     } else {
-      console.log('[' + new Date().toISOString() + '] CALL Unknown extension ' + dialedExt + ', using default');
+      logger.info('Unknown extension, using default', { extension: dialedExt });
       deviceConfig = deviceRegistry.getDefault();
     }
   }
@@ -111,18 +111,18 @@ async function handleInvite(req, res, options) {
     const originalSdp = req.body;
     const audioOnlySdp = stripVideoFromSdp(originalSdp);
     if (originalSdp !== audioOnlySdp) {
-      console.log('[' + new Date().toISOString() + '] CALL Stripped video track from SDP');
+      logger.debug('Stripped video track from SDP');
     }
 
     const result = await mediaServer.connectCaller(req, res, { remoteSdp: audioOnlySdp });
     const { endpoint, dialog } = result;
     const callUuid = endpoint.uuid;
 
-    console.log('[' + new Date().toISOString() + '] CALL Connected: ' + callUuid);
+    logger.info('Call connected', { callUuid });
 
     // Destroy endpoint when dialog is torn down (handles hangup case)
     dialog.on('destroy', function() {
-      console.log('[' + new Date().toISOString() + '] CALL Ended');
+      logger.info('Call ended', { callUuid });
       if (endpoint) endpoint.destroy().catch(function() {});
     });
 
@@ -143,7 +143,7 @@ async function handleInvite(req, res, options) {
     return { endpoint: endpoint, dialog: dialog, callUuid: callUuid };
 
   } catch (error) {
-    console.error('[' + new Date().toISOString() + '] CALL Error:', error.message);
+    logger.error('Call error', { error: error.message });
     try { res.send(500); } catch (e) {}
     throw error;
   }

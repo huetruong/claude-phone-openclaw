@@ -243,7 +243,7 @@ async function runConversationLoop(endpoint, dialog, callUuid, options) {
         });
 
         if (result && !result.isError && result.response) {
-          greetingText = result.response;
+          greetingText = extractVoiceLine(result.response);
         } else {
           greetingText = FALLBACK_GREETING;
         }
@@ -376,7 +376,7 @@ async function runConversationLoop(endpoint, dialog, callUuid, options) {
 
       let utterance = null;
       try {
-        utterance = await session.waitForUtterance({ timeoutMs: 30000 });
+        utterance = await session.waitForUtterance({ timeoutMs: 60000 });
         logger.info('Got utterance', { callUuid, bytes: utterance.audio.length, reason: utterance.reason });
       } catch (err) {
         if (!callActive) break;
@@ -521,6 +521,12 @@ async function runConversationLoop(endpoint, dialog, callUuid, options) {
 
       const responseUrl = await ttsService.generateSpeech(voiceLine, voiceId);
       if (callActive) await endpoint.play(responseUrl);
+
+      // If agent response signals end-of-call (callback dispatched, goodbye, etc.), hang up.
+      if (isGoodbye(voiceLine)) {
+        logger.info('Agent signalled end of call', { callUuid, voiceLine });
+        break;
+      }
 
       logger.info('Turn complete', { callUuid, turn: turnCount });
     }

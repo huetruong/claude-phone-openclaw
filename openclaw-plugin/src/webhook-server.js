@@ -13,7 +13,7 @@ const { createAuthMiddleware } = require('./auth');
  * @param {string} config.apiKey - Bearer token for auth middleware
  * @param {Array}  config.bindings - accountId → agentId mapping array
  * @param {Array}  config.accounts - account definitions (for future allowlist enforcement)
- * @param {Function} config.queryAgent - async (agentId, sessionId, prompt, peerId, identityContext) => string
+ * @param {Function} config.queryAgent - async (agentId, sessionId, prompt, peerId, identityContext, device) => string
  * @param {Function} [config.resolveIdentity] - optional (peerId) => { isFirstCall, identity }
  */
 function createServer(config = {}) {
@@ -24,10 +24,14 @@ function createServer(config = {}) {
   const app = express();
   const auth = createAuthMiddleware(config.apiKey);
 
-  // Build O(1) lookup Map from bindings array.
+  // Build O(1) lookup Maps from bindings and accounts arrays.
   const bindingMap = new Map();
   for (const b of (config.bindings || [])) {
     bindingMap.set(b.accountId, b.agentId);
+  }
+  const accountExtensionMap = new Map();
+  for (const a of (config.accounts || [])) {
+    if (a.id && a.extension) accountExtensionMap.set(a.id, a.extension);
   }
 
   const queryAgent = config.queryAgent;
@@ -86,8 +90,11 @@ function createServer(config = {}) {
         }
       }
 
+      // Resolve accountId → extension (device) for callback context.
+      const device = accountExtensionMap.get(accountId) || null;
+
       // Route query to OpenClaw agent.
-      const response = await queryAgent(agentId, sessionId, prompt, peerId, identityContext);
+      const response = await queryAgent(agentId, sessionId, prompt, peerId, identityContext, device);
       res.json({ response });
     } catch (err) {
       logger.error('query failed', { callId: (req.body || {}).callId, error: err.message });
