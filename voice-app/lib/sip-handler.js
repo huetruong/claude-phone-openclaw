@@ -68,7 +68,7 @@ function stripVideoFromSdp(sdp) {
  * Handle incoming SIP INVITE
  */
 async function handleInvite(req, res, options) {
-  const { mediaServer, deviceRegistry } = options;
+  const { srf, mediaServer, deviceRegistry } = options;
 
   const callerId = extractCallerId(req);
   const dialedExt = extractDialedExtension(req);
@@ -89,11 +89,16 @@ async function handleInvite(req, res, options) {
   logger.debug('Incoming call details', { peerId: callerId, extension: dialedExt || 'unknown' });
   logger.info('Incoming call', { extension: dialedExt || 'unknown' });
 
-  // ── Caller allowlist check — reject BEFORE answering ──
+  // ── Caller allowlist check — answer then immediately hang up ──
+  // Must answer (200 OK) before destroying so FreePBX does not route to voicemail.
+  // Pre-answer rejection codes (4xx/6xx) trigger PBX voicemail fallback.
   if (!checkAllowFrom(deviceConfig, callerId)) {
     logger.info(`[sip-voice] call rejected: unknown caller on extension ${deviceConfig?.extension}`);
     logger.debug('Rejected caller details', { peerId: callerId });
-    res.send(403);
+    try {
+      const rejectDialog = await srf.createUAS(req, res, { localSdp: req.body });
+      rejectDialog.destroy();
+    } catch (e) { /* ignore */ }
     return;
   }
 

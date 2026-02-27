@@ -239,6 +239,7 @@ function checkReadyState() {
     // Register SIP INVITE handler
     srf.invite(function(req, res) {
       handleInvite(req, res, {
+        srf: srf,
         audioForkServer: audioForkServer,
         mediaServer: mediaServer,
         deviceRegistry: deviceRegistry,
