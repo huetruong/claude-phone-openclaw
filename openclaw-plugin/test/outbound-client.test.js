@@ -49,7 +49,7 @@ test('outbound-client - returns { callId, status } on successful call', async ()
     const { port } = server.address();
     const client = requireOutboundClient();
     const result = await client.placeCall({
-      voiceAppUrl: `http://127.0.0.1:${port}/api`,
+      voiceAppUrl: `http://127.0.0.1:${port}`,
       to: '12125550100',
       device: '9000',
       message: 'Your task is complete.',
@@ -76,7 +76,7 @@ test('outbound-client - POSTs to /outbound-call with correct body', async () => 
     const { port } = server.address();
     const client = requireOutboundClient();
     await client.placeCall({
-      voiceAppUrl: `http://127.0.0.1:${port}/api`,
+      voiceAppUrl: `http://127.0.0.1:${port}`,
       to: '12125550100',
       device: '9000',
       message: 'Task done.',
@@ -103,7 +103,7 @@ test('outbound-client - strips + prefix from phone number', async () => {
     const { port } = server.address();
     const client = requireOutboundClient();
     await client.placeCall({
-      voiceAppUrl: `http://127.0.0.1:${port}/api`,
+      voiceAppUrl: `http://127.0.0.1:${port}`,
       to: '+12125550100',
       device: '9000',
       message: 'Test.',
@@ -125,7 +125,7 @@ test('outbound-client - defaults mode to announce when not provided', async () =
     const { port } = server.address();
     const client = requireOutboundClient();
     await client.placeCall({
-      voiceAppUrl: `http://127.0.0.1:${port}/api`,
+      voiceAppUrl: `http://127.0.0.1:${port}`,
       to: '12125550100',
       device: '9000',
       message: 'Hello.',
@@ -147,7 +147,7 @@ test('outbound-client - passes mode: conversation correctly in request body', as
     const { port } = server.address();
     const client = requireOutboundClient();
     await client.placeCall({
-      voiceAppUrl: `http://127.0.0.1:${port}/api`,
+      voiceAppUrl: `http://127.0.0.1:${port}`,
       to: '12125550100',
       device: '9000',
       message: 'Hello, starting conversation.',
@@ -182,7 +182,7 @@ test('outbound-client - returns { error } on non-200 HTTP response', async () =>
     const { port } = server.address();
     const client = requireOutboundClient();
     const result = await client.placeCall({
-      voiceAppUrl: `http://127.0.0.1:${port}/api`,
+      voiceAppUrl: `http://127.0.0.1:${port}`,
       to: '12125550100',
       device: '9000',
       message: 'Test.',
@@ -238,7 +238,7 @@ test('outbound-client - returns { error } on invalid JSON response', async () =>
     const { port } = server.address();
     const client = requireOutboundClient();
     const result = await client.placeCall({
-      voiceAppUrl: `http://127.0.0.1:${port}/api`,
+      voiceAppUrl: `http://127.0.0.1:${port}`,
       to: '12125550100',
       device: '9000',
       message: 'Test.',
@@ -259,7 +259,7 @@ test('outbound-client - returns { error } when 200 response is missing callId', 
     const { port } = server.address();
     const client = requireOutboundClient();
     const result = await client.placeCall({
-      voiceAppUrl: `http://127.0.0.1:${port}/api`,
+      voiceAppUrl: `http://127.0.0.1:${port}`,
       to: '12125550100',
       device: '9000',
       message: 'Test.',
