@@ -41,7 +41,7 @@ async function placeCall({ voiceAppUrl, to, device, message, mode = 'announce' }
   const normalizedTo = typeof to === 'string' ? to.replace(/^\+/, '') : to;
 
   const body = JSON.stringify({ to: normalizedTo, device, message, mode });
-  const url = `${voiceAppUrl}/outbound-call`;
+  const url = `${voiceAppUrl}/api/outbound-call`;
 
   return new Promise((resolve) => {
     // settled flag prevents double-logging and double-resolve when req.destroy()

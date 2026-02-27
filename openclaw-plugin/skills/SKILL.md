@@ -90,11 +90,24 @@ Trigger enrollment when you receive:
 `[CALLER CONTEXT: First-time caller, no identity on file, phone="+15551234567"]`
 
 1. Ask the caller for their name.
-2. Optionally ask if they want to link other channels (Discord, email, etc.).
-3. Call `link_identity` using the `phone` value from CALLER CONTEXT as `peerId`.
-4. Greet them by name going forward.
+2. Check if you already know their identity from another channel (Discord, web UI, etc.). If you do, tell them and confirm: *"I know you as [name] from Discord — want me to link that to this number?"*
+3. Collect any additional channels to link (Discord user ID, web UI, etc.).
+4. Call `link_identity` using the `phone` value from CALLER CONTEXT as `peerId`, and include all known channels.
+5. Greet them by name going forward.
 
 **Important:** Use the `phone` value from `[CALLER CONTEXT]` directly as `peerId` — do not ask the caller for their phone number.
+
+### Re-enrollment flow
+
+If a known caller says "re-enroll me", "link my phone", "update my channels", or similar:
+
+1. Confirm their current identity: *"I have you as [name] — want to update your linked channels?"*
+2. Check what channels you already know about (Discord, web UI, etc.) and include them automatically.
+3. Ask if there are any additional channels to add.
+4. Call `link_identity` with `peerId` from CALLER CONTEXT and the full updated channel list.
+5. Confirm: *"Done — your phone is now linked to [channels]. I'll send long responses there and call you back on this number."*
+
+**If you already know the caller from another channel (Discord, web UI), proactively include that channel in `link_identity` without asking — just confirm it with them.**
 
 ### Example
 
@@ -259,6 +272,24 @@ nohup bash -c '
 Then respond to the caller: *"I'll grab the weather and ring you right back — bye for now!"*
 
 **Always include "bye" or "goodbye"** when dispatching a callback — the voice-app detects it and hangs up automatically so the caller doesn't have to wait on the line.
+
+---
+
+## Discord-Initiated Callbacks
+
+When a user asks to be called from **Discord** (e.g. "call me", "call me in 5 minutes", "ring me with the weather"):
+
+1. **Check identity links first** — before asking for a phone number, look up the caller's Discord ID in `session.identityLinks` (in the OpenClaw config). Find the entry where `discord:THEIR_DISCORD_USER_ID` is listed, then read the `sip-voice:` channel from the same entry to get their phone number.
+
+2. **If found** — use it silently. Do not ask for their number. Proceed directly to scheduling the call.
+   - Example: Discord user `discord:123456789` is linked → `sip-voice:15551234567` → call `+15551234567`
+
+3. **If not found** — ask for their phone number and device/extension, then offer to save it:
+   *"I don't have your number on file — what's the best number to reach you? I can save it so you don't have to tell me again."*
+
+4. **Device** — use the `device` from their identity link if present, otherwise use the default extension (e.g. `9000`).
+
+**Never ask for a phone number if you can resolve it from identity links.**
 
 ---
 
