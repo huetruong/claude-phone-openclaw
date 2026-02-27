@@ -68,7 +68,7 @@ function stripVideoFromSdp(sdp) {
  * Handle incoming SIP INVITE
  */
 async function handleInvite(req, res, options) {
-  const { srf, mediaServer, deviceRegistry } = options;
+  const { mediaServer, deviceRegistry } = options;
 
   const callerId = extractCallerId(req);
   const dialedExt = extractDialedExtension(req);
