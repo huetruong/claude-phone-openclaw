@@ -54,7 +54,7 @@ async function initiateOutboundCall(srf, mediaServer, options) {
 
     // Pass number through as-is — PBX handles outbound routing
     const phoneNumber = to;
-    const sipTrunkHost = process.env.SIP_TRUNK_HOST || '10.70.7.50';
+    const sipTrunkHost = process.env.SIP_REGISTRAR || process.env.SIP_TRUNK_HOST || '10.70.7.50';
     const externalIp = process.env.EXTERNAL_IP || '10.70.7.81';
     const defaultCallerId = callerId || process.env.DEFAULT_CALLER_ID || '+15551234567';
 
